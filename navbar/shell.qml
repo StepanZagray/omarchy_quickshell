@@ -192,12 +192,17 @@ ShellRoot {
         running: false
         command: ["bash", "-lc",
             "type=none; "
-            + "if ip -o link show | awk -F': ' '{print $2}' | grep -qE '^(en|eth)'; then "
-            + "  if ip -o addr show | grep -qE '^[0-9]+: (en|eth)[^ ]*.*inet '; then type=eth; fi; "
-            + "fi; "
+            + "if ip -o addr show | grep -qE '^[0-9]+: (en|eth)[^ ]*.*inet '; then type=eth; fi; "
             + "if [ \"$type\" = none ]; then "
-            + "  s=$(nmcli -t -f IN-USE,SIGNAL dev wifi 2>/dev/null | awk -F: '$1==\"*\"{print $2; exit}'); "
-            + "  if [ -n \"$s\" ]; then type=wifi:$s; fi; "
+            + "  for w in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do "
+            + "    dbm=$(iw dev \"$w\" link 2>/dev/null | awk '/signal:/{print $2}'); "
+            + "    if [ -n \"$dbm\" ]; then "
+            + "      pct=$((2 * (dbm + 100))); "
+            + "      [ $pct -lt 0 ] && pct=0; "
+            + "      [ $pct -gt 100 ] && pct=100; "
+            + "      type=wifi:$pct; break; "
+            + "    fi; "
+            + "  done; "
             + "fi; printf '%s' \"$type\""]
         stdout: StdioCollector {
             onStreamFinished: {
