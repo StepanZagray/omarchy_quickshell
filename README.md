@@ -9,6 +9,7 @@ Personal [Quickshell](https://quickshell.outfoxxed.me) configs built for [omarch
 | [`theme-wash/`](./theme-wash) | Theme-swap flourish. On `omarchy theme set <name>`, washes the new accent across the bar from an alternating corner like ink spilling in water, with the old accent pulsing out from the centre and the new theme's name popping briefly mid-wash. |
 | [`music-wallpaper/`](./music-wallpaper) | Music-reactive wallpaper. Reads `cliamp visstream` NDJSON, paints a soft radial pulse with mids halo, bass-transient ripples, and a low-opacity EQ across the bottom. Tints to the omarchy accent. |
 | [`clipboard-ripple/`](./clipboard-ripple) | Clipboard tactile feedback. `wl-paste --watch` blooms a soft accent-tinted halo outward from the cursor while a brighter inner core pulses twice. Click-through overlay. |
+| [`battery-drip/`](./battery-drip) | Rare, high-information battery feedback. Crossings of 20% / 10% drip a teardrop down the right edge of the bar; transition to Full (or plug-in already near full) fills a battery outline with a rising sinusoidal wave. Click-through overlay. |
 
 Each module is a self-contained Quickshell config rooted at `shell.qml`.
 
@@ -34,6 +35,9 @@ qs -n -d -c music-wallpaper
 
 # launch the clipboard ripple
 qs -n -d -c clipboard-ripple
+
+# launch the battery drip / fill overlay
+qs -n -d -c battery-drip
 ```
 
 `-c <name>` resolves to `~/.config/quickshell/<name>/shell.qml`. `-d` daemonizes, `-n` makes it idempotent.
