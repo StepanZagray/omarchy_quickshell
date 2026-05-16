@@ -75,6 +75,48 @@ ShellRoot {
     property string dd: "--"
     property string mon: "---"
 
+    // ---------- Calendar popup state ----------
+    property bool calendarVisible: false
+    property int calendarMonthOffset: 0
+    // Bumped on each open so the cells/title bindings below re-evaluate
+    // (new Date() is opaque to QML's dependency tracker — touching this
+    // int forces a recompute even when calendarMonthOffset is unchanged).
+    property int calendarTick: 0
+
+    readonly property var calendarCells: {
+        root.calendarTick;
+        const now = new Date();
+        const m = now.getMonth() + root.calendarMonthOffset;
+        const first = new Date(now.getFullYear(), m, 1);
+        const lastDay = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+        // Monday-first week: shift Sunday (0) to slot 6.
+        const startDay = (first.getDay() + 6) % 7;
+        const today = new Date();
+        const isCurrentMonth = first.getFullYear() === today.getFullYear()
+                            && first.getMonth() === today.getMonth();
+        const cells = [];
+        for (let i = 0; i < startDay; i++) cells.push({day: 0, today: false});
+        for (let d = 1; d <= lastDay; d++) {
+            cells.push({day: d, today: isCurrentMonth && d === today.getDate()});
+        }
+        while (cells.length < 42) cells.push({day: 0, today: false});
+        return cells;
+    }
+
+    readonly property string calendarTitle: {
+        root.calendarTick;
+        const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+        const now = new Date();
+        const d = new Date(now.getFullYear(), now.getMonth() + root.calendarMonthOffset, 1);
+        return months[d.getMonth()] + " " + d.getFullYear();
+    }
+
+    function openCalendar() {
+        root.calendarMonthOffset = 0;
+        root.calendarTick++;
+        root.calendarVisible = true;
+    }
+
     // ---------- Palette loader ----------
     // Reads omarchy's colors.toml and re-applies the palette on any change.
     // The file is rewritten in place when `omarchy theme set` runs, so
@@ -321,11 +363,14 @@ ShellRoot {
                 color: root.sep
             }
 
-            // Centre cluster: clock + date.
+            // Centre cluster: clock + date. z is bumped above the RowLayout
+            // so the date's MouseArea isn't shadowed by the layout's
+            // fill-width spacer occupying the same screen region.
             Row {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
+                z: 10
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -342,14 +387,34 @@ ShellRoot {
                     color: root.sumi
                     opacity: 0.4
                 }
-                Text {
+                Item {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.dd + " " + root.mon
-                    color: root.sumi
-                    font.family: root.mono
-                    font.pixelSize: 10
-                    font.letterSpacing: 2
-                    font.italic: true
+                    implicitWidth: dateText.implicitWidth
+                    implicitHeight: dateText.implicitHeight
+
+                    Text {
+                        id: dateText
+                        anchors.centerIn: parent
+                        text: root.dd + " " + root.mon
+                        color: dateMouse.containsMouse ? root.ink : root.sumi
+                        font.family: root.mono
+                        font.pixelSize: 10
+                        font.letterSpacing: 2
+                        font.italic: true
+                        Behavior on color { ColorAnimation { duration: 180 } }
+                    }
+
+                    MouseArea {
+                        id: dateMouse
+                        anchors.fill: parent
+                        anchors.margins: -6
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (root.calendarVisible) root.calendarVisible = false;
+                            else root.openCalendar();
+                        }
+                    }
                 }
             }
 
@@ -412,6 +477,227 @@ ShellRoot {
                     glyph: root.batteryIcon()
                     color: root.batVal <= 10 ? root.seal : root.batVal <= 20 ? root.indigo : root.ink
                     onActivated: root.run("omarchy-menu power")
+                }
+            }
+        }
+    }
+
+    // ---------- Calendar popup ----------
+    // Overlay layer that floats below the bar. ExclusionMode.Ignore so it
+    // doesn't reserve space (it would shift the bar otherwise). The card
+    // descends from the date on a thin seal-coloured thread — thread leads,
+    // card trails — so the popup reads as something dropped from the bar.
+    PanelWindow {
+        id: calendarPopup
+        // Stay alive while the close animation plays; once reveal decays
+        // below the threshold the layer surface tears down.
+        visible: root.calendarVisible || reveal > 0.001
+        color: "transparent"
+        anchors { top: true; left: true; right: true }
+        implicitHeight: root.barHeight + 260
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "omarchy-calendar"
+
+        property real reveal: root.calendarVisible ? 1 : 0
+        Behavior on reveal { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+
+        // Thread leads (full extension by ~55% of the reveal), card trails
+        // (starts emerging around 40%). Symmetrical on the way out.
+        readonly property real threadProgress: Math.min(1, reveal / 0.55)
+        readonly property real cardProgress:   Math.max(0, (reveal - 0.4) / 0.6)
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.calendarVisible = false
+        }
+
+        // The "thread" — a 1px seal line that drops from just below the
+        // bar, marking where the popup originated from.
+        Rectangle {
+            id: thread
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: root.barHeight - 1
+            width: 1
+            height: 14 * calendarPopup.threadProgress
+            color: root.seal
+            opacity: calendarPopup.threadProgress
+            antialiasing: true
+        }
+
+        // Tiny seal seed where the thread meets the card — a stitch.
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: thread.y + thread.height - 1
+            width: 3
+            height: 3
+            radius: 1.5
+            color: root.seal
+            opacity: calendarPopup.threadProgress
+            antialiasing: true
+        }
+
+        Rectangle {
+            id: card
+            anchors.top: thread.bottom
+            anchors.topMargin: 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: 232
+            height: cardCol.implicitHeight + 24
+            color: root.bg
+            border.color: root.sep
+            border.width: 1
+            radius: 0
+            opacity: calendarPopup.cardProgress
+            transformOrigin: Item.Top
+            scale: 0.94 + 0.06 * calendarPopup.cardProgress
+
+            // Swallow clicks on the card so they don't bubble to the outer
+            // dismiss area.
+            MouseArea { anchors.fill: parent }
+
+            Column {
+                id: cardCol
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 8
+
+                // Header: month + year, with prev/next.
+                Item {
+                    width: parent.width
+                    height: 22
+
+                    Text {
+                        id: monthLabel
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.calendarTitle
+                        color: root.seal
+                        font.family: root.serif
+                        font.pixelSize: 14
+                        font.letterSpacing: 2
+                    }
+
+                    Row {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 6
+
+                        Text {
+                            id: prevBtn
+                            text: "‹"
+                            color: prevMouse.containsMouse ? root.seal : root.ink
+                            font.family: root.mono
+                            font.pixelSize: 16
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            MouseArea {
+                                id: prevMouse
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { root.calendarMonthOffset--; root.calendarTick++; }
+                            }
+                        }
+
+                        Text {
+                            text: "•"
+                            color: root.sumi
+                            font.family: root.mono
+                            font.pixelSize: 10
+                            opacity: 0.5
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { root.calendarMonthOffset = 0; root.calendarTick++; }
+                            }
+                        }
+
+                        Text {
+                            id: nextBtn
+                            text: "›"
+                            color: nextMouse.containsMouse ? root.seal : root.ink
+                            font.family: root.mono
+                            font.pixelSize: 16
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            MouseArea {
+                                id: nextMouse
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { root.calendarMonthOffset++; root.calendarTick++; }
+                            }
+                        }
+                    }
+                }
+
+                // Hairline under header.
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: root.sep
+                }
+
+                // Weekday row (Monday first).
+                Grid {
+                    columns: 7
+                    rowSpacing: 0
+                    columnSpacing: 0
+                    width: parent.width
+
+                    Repeater {
+                        model: ["MO","TU","WE","TH","FR","SA","SU"]
+                        delegate: Item {
+                            required property string modelData
+                            width: 28
+                            height: 18
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: root.sumi
+                                font.family: root.mono
+                                font.pixelSize: 9
+                                font.letterSpacing: 1
+                            }
+                        }
+                    }
+                }
+
+                // Day grid: 6 rows of 7 cells.
+                Grid {
+                    columns: 7
+                    rowSpacing: 0
+                    columnSpacing: 0
+                    width: parent.width
+
+                    Repeater {
+                        model: root.calendarCells
+                        delegate: Item {
+                            required property var modelData
+                            width: 28
+                            height: 24
+
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 22
+                                height: 22
+                                color: modelData.today ? root.seal : "transparent"
+                                opacity: modelData.today ? 0.18 : 0
+                                radius: 0
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.day === 0 ? "" : modelData.day
+                                color: modelData.today ? root.seal : root.ink
+                                opacity: modelData.day === 0 ? 0 : 1
+                                font.family: root.mono
+                                font.pixelSize: 11
+                                font.weight: modelData.today ? Font.Medium : Font.Light
+                            }
+                        }
+                    }
                 }
             }
         }
