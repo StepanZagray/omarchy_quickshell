@@ -122,6 +122,41 @@ ShellRoot {
         root.screenshotsVisible = true;
     }
 
+    // Move selection by `delta` thumbs along the grid's reading order;
+    // wraps across pages when stepping off either edge.
+    function moveScreenshotSelection(delta) {
+        if (root.screenshotFiles.length === 0) return;
+        const visible = root.visibleScreenshots;
+        const next = root.selectedScreenshot + delta;
+        if (next < 0 && root.screenshotPage > 0) {
+            root.screenshotPage--;
+            root.selectedScreenshot = Math.min(
+                root.screenshotsPerPage - 1,
+                root.screenshotFiles.length - root.screenshotPage * root.screenshotsPerPage - 1
+            );
+        } else if (next >= visible.length && root.screenshotPage < root.screenshotPageCount - 1) {
+            root.screenshotPage++;
+            root.selectedScreenshot = 0;
+        } else if (next >= 0 && next < visible.length) {
+            root.selectedScreenshot = next;
+        }
+    }
+
+    // Row step (±4). Stays within the current page.
+    function moveScreenshotRow(delta) {
+        const visible = root.visibleScreenshots;
+        const next = root.selectedScreenshot + delta * 4;
+        if (next >= 0 && next < visible.length) root.selectedScreenshot = next;
+    }
+
+    function pageScreenshots(delta) {
+        const next = root.screenshotPage + delta;
+        if (next >= 0 && next < root.screenshotPageCount) {
+            root.screenshotPage = next;
+            root.selectedScreenshot = 0;
+        }
+    }
+
     function formatScreenshotLabel(path) {
         const m = String(path).match(/screenshot-(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-\d{2}\.[A-Za-z0-9]+$/);
         if (m) return m[1] + " " + m[2] + ":" + m[3];
@@ -136,6 +171,9 @@ ShellRoot {
         const start = root.screenshotPage * root.screenshotsPerPage;
         return root.screenshotFiles.slice(start, start + root.screenshotsPerPage);
     }
+
+    readonly property var selectedScreenshotEntry:
+        root.selectedScreenshot >= 0 ? (root.visibleScreenshots[root.selectedScreenshot] || null) : null
 
     readonly property int screenshotPageCount: {
         if (root.screenshotFiles.length === 0) return 1;
@@ -1203,18 +1241,34 @@ ShellRoot {
 
             focus: root.screenshotsVisible
             Keys.onPressed: function(event) {
-                if (event.key === Qt.Key_Escape || event.key === Qt.Key_Q) {
+                const k = event.key;
+                if (k === Qt.Key_Escape || k === Qt.Key_Q) {
                     root.screenshotsVisible = false;
-                    event.accepted = true;
-                } else if (event.key === Qt.Key_Left) {
-                    if (root.screenshotPage > 0) { root.screenshotPage--; root.selectedScreenshot = 0; }
-                    event.accepted = true;
-                } else if (event.key === Qt.Key_Right) {
-                    if (root.screenshotPage < root.screenshotPageCount - 1) {
-                        root.screenshotPage++; root.selectedScreenshot = 0;
+                } else if (k === Qt.Key_Right || k === Qt.Key_L || k === Qt.Key_Tab) {
+                    root.moveScreenshotSelection(1);
+                } else if (k === Qt.Key_Left || k === Qt.Key_H || k === Qt.Key_Backtab) {
+                    root.moveScreenshotSelection(-1);
+                } else if (k === Qt.Key_Down || k === Qt.Key_J) {
+                    root.moveScreenshotRow(1);
+                } else if (k === Qt.Key_Up || k === Qt.Key_K) {
+                    root.moveScreenshotRow(-1);
+                } else if (k === Qt.Key_N) {
+                    root.pageScreenshots(1);
+                } else if (k === Qt.Key_P) {
+                    root.pageScreenshots(-1);
+                } else if (k === Qt.Key_O || k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) {
+                    const e = root.selectedScreenshotEntry;
+                    if (e) {
+                        root.run("xdg-open " + JSON.stringify(e.path));
+                        root.screenshotsVisible = false;
                     }
-                    event.accepted = true;
+                } else if (k === Qt.Key_C) {
+                    const e = root.selectedScreenshotEntry;
+                    if (e) root.copyScreenshotToClipboard(e.path);
+                } else {
+                    return;
                 }
+                event.accepted = true;
             }
 
             MouseArea { anchors.fill: parent }
@@ -1326,8 +1380,8 @@ ShellRoot {
                     visible: root.screenshotFiles.length > 0
 
                     Repeater {
-                        // Always 12 slots so the grid keeps its silhouette
-                        // even on a partially-filled last page.
+                        // 12 slots regardless of page fill so the grid
+                        // keeps its silhouette on a partial last page.
                         model: root.screenshotsPerPage
                         delegate: Item {
                             id: shotCell
@@ -1352,11 +1406,13 @@ ShellRoot {
                                 anchors.fill: parent
                                 anchors.margins: 1
                                 visible: shotCell.filled
-                                source: shotCell.filled ? "file://" + shotCell.entry.path : ""
-                                // Decode to a thumbnail bitmap so a screen
-                                // of 4K PNGs doesn't balloon RAM.
-                                sourceSize.width: 312
-                                sourceSize.height: 192
+                                // Source gated on popup visibility so the
+                                // QQuickPixmapCache drops decoded bitmaps
+                                // when the widget is hidden.
+                                source: (shotCell.filled && root.screenshotsVisible)
+                                        ? "file://" + shotCell.entry.path : ""
+                                sourceSize.width: 256
+                                sourceSize.height: 144
                                 fillMode: Image.PreserveAspectCrop
                                 asynchronous: true
                                 cache: true
@@ -1365,8 +1421,6 @@ ShellRoot {
                                 Behavior on opacity { NumberAnimation { duration: 140 } }
                             }
 
-                            // Hover scrim so the cursor's position is
-                            // legible against any underlying screenshot.
                             Rectangle {
                                 anchors.fill: parent
                                 anchors.margins: 1
@@ -1378,13 +1432,9 @@ ShellRoot {
                                 Behavior on border.width { NumberAnimation { duration: 120 } }
                             }
 
-                            // Copy ack: a seal-tinted wash and centred
-                            // "COPIED" tag that snap on the moment
-                            // wl-copy fires and fade out over ~1.4s as
-                            // copiedReset clears root.copiedPath. The
-                            // border thickens at the same time so the
-                            // tile reads as briefly "captured" even from
-                            // peripheral vision.
+                            // Snap-on / fade-out so the ack reads even
+                            // from peripheral vision; copiedReset clears
+                            // root.copiedPath after 1.4s.
                             Rectangle {
                                 anchors.fill: parent
                                 anchors.margins: 1
@@ -1417,19 +1467,14 @@ ShellRoot {
                                 anchors.fill: parent
                                 hoverEnabled: shotCell.filled
                                 enabled: shotCell.filled
-                                cursorShape: shotCell.filled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                cursorShape: Qt.PointingHandCursor
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 onEntered: root.selectedScreenshot = shotCell.index
                                 onClicked: (e) => {
-                                    if (!shotCell.filled) return;
                                     root.selectedScreenshot = shotCell.index;
                                     if (e.button === Qt.RightButton) {
                                         root.copyScreenshotToClipboard(shotCell.entry.path);
                                     } else {
-                                        // Open in xdg-open and dismiss
-                                        // — the popup has done its job
-                                        // and the user wants the viewer
-                                        // to take focus.
                                         root.run("xdg-open " + JSON.stringify(shotCell.entry.path));
                                         root.screenshotsVisible = false;
                                     }
@@ -1439,49 +1484,38 @@ ShellRoot {
                     }
                 }
 
-                // Footer: timestamp + actions. Visible only when a thumb
-                // is hovered/selected; collapses cleanly otherwise.
                 Rectangle {
                     width: parent.width
                     height: 1
                     color: root.sep
-                    visible: root.selectedScreenshot >= 0
-                            && root.visibleScreenshots[root.selectedScreenshot] !== undefined
+                    visible: root.selectedScreenshotEntry !== null
                 }
 
                 Item {
                     width: parent.width
                     height: 22
-                    visible: root.selectedScreenshot >= 0
-                            && root.visibleScreenshots[root.selectedScreenshot] !== undefined
+                    visible: root.selectedScreenshotEntry !== null
 
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: {
-                            const e = root.visibleScreenshots[root.selectedScreenshot];
-                            return e ? e.label : "";
-                        }
+                        text: root.selectedScreenshotEntry ? root.selectedScreenshotEntry.label : ""
                         color: root.ink
                         font.family: root.mono
                         font.pixelSize: 11
                         font.letterSpacing: 2
                     }
 
-                    // Hint: click opens (xdg-open), right-click copies.
-                    // Swaps to a seal-coloured "COPIED" ack while
-                    // root.copiedPath is set (Timer clears it ~1.4s
-                    // after the action), then eases back to the resting
-                    // hint.
                     Text {
+                        readonly property bool copied: root.copiedPath !== ""
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        text: root.copiedPath !== "" ? "COPIED TO CLIPBOARD" : "RIGHT-CLICK TO COPY"
-                        color: root.copiedPath !== "" ? root.seal : root.sumi
+                        text: copied ? "COPIED TO CLIPBOARD" : "RIGHT-CLICK TO COPY"
+                        color: copied ? root.seal : root.sumi
                         font.family: root.mono
                         font.pixelSize: 11
                         font.letterSpacing: 2
-                        opacity: root.copiedPath !== "" ? 1.0 : 0.7
+                        opacity: copied ? 1.0 : 0.7
                         Behavior on color { ColorAnimation { duration: 180 } }
                         Behavior on opacity { NumberAnimation { duration: 180 } }
                     }
