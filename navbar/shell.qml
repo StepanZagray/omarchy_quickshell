@@ -116,6 +116,52 @@ ShellRoot {
     // int forces a recompute even when calendarMonthOffset is unchanged).
     property int calendarTick: 0
 
+    // Easter Sunday for any Gregorian year via Butcher's anonymous algorithm.
+    // Pure arithmetic, no loops; returns a Date in local time.
+    function easterDate(year) {
+        const a = year % 19;
+        const b = Math.floor(year / 100);
+        const c = year % 100;
+        const d = Math.floor(b / 4);
+        const e = b % 4;
+        const f = Math.floor((b + 8) / 25);
+        const g = Math.floor((b - f + 1) / 3);
+        const h = (19 * a + b - d - g + 15) % 30;
+        const i = Math.floor(c / 4);
+        const k = c % 4;
+        const l = (32 + 2 * e + 2 * i - h - k) % 7;
+        const mm = Math.floor((a + 11 * h + 22 * l) / 451);
+        const month = Math.floor((h + l - 7 * mm + 114) / 31);   // 3=Mar, 4=Apr
+        const day = ((h + l - 7 * mm + 114) % 31) + 1;
+        return new Date(year, month - 1, day);
+    }
+
+    // Norwegian red days (helligdager). Returns the name, or "" if not a
+    // holiday. Fixed dates + Easter-relative moveable feasts covers all
+    // official Norwegian public holidays.
+    function norwegianHoliday(year, month, day) {
+        if (month === 0  && day === 1)  return "Nyttårsdag";
+        if (month === 4  && day === 1)  return "Arbeidernes dag";
+        if (month === 4  && day === 17) return "Grunnlovsdagen";
+        if (month === 11 && day === 25) return "Første juledag";
+        if (month === 11 && day === 26) return "Andre juledag";
+
+        const easter = root.easterDate(year);
+        const dayMs = 86400000;
+        const target = new Date(year, month, day);
+        const offset = Math.round((target.getTime() - easter.getTime()) / dayMs);
+
+        if (offset === -3) return "Skjærtorsdag";
+        if (offset === -2) return "Langfredag";
+        if (offset === 0)  return "Første påskedag";
+        if (offset === 1)  return "Andre påskedag";
+        if (offset === 39) return "Kristi himmelfartsdag";
+        if (offset === 49) return "Første pinsedag";
+        if (offset === 50) return "Andre pinsedag";
+
+        return "";
+    }
+
     readonly property var calendarCells: {
         root.calendarTick;
         const now = new Date();
@@ -128,11 +174,15 @@ ShellRoot {
         const isCurrentMonth = first.getFullYear() === today.getFullYear()
                             && first.getMonth() === today.getMonth();
         const cells = [];
-        for (let i = 0; i < startDay; i++) cells.push({day: 0, today: false});
+        for (let i = 0; i < startDay; i++) cells.push({day: 0, today: false, holiday: ""});
         for (let d = 1; d <= lastDay; d++) {
-            cells.push({day: d, today: isCurrentMonth && d === today.getDate()});
+            cells.push({
+                day: d,
+                today: isCurrentMonth && d === today.getDate(),
+                holiday: root.norwegianHoliday(first.getFullYear(), first.getMonth(), d)
+            });
         }
-        while (cells.length < 42) cells.push({day: 0, today: false});
+        while (cells.length < 42) cells.push({day: 0, today: false, holiday: ""});
         return cells;
     }
 
@@ -152,9 +202,34 @@ ShellRoot {
         return String(d.getFullYear());
     }
 
+    // Currently selected day-of-month within the displayed month; 0 = none.
+    // Reset to 0 when navigating months (the selection only makes sense
+    // for the visible month). Set to today when opening the popup.
+    property int selectedDay: 0
+
+    readonly property string selectedDayDetail: {
+        root.calendarTick;
+        if (root.selectedDay <= 0) return "";
+        const days   = ["SUNDAY","MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY"];
+        const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+        const now = new Date();
+        const d = new Date(now.getFullYear(), now.getMonth() + root.calendarMonthOffset, root.selectedDay);
+        return days[d.getDay()] + " · " + root.selectedDay + " " + months[d.getMonth()] + " " + d.getFullYear();
+    }
+
+    readonly property string selectedDayHoliday: {
+        root.calendarTick;
+        if (root.selectedDay <= 0) return "";
+        const now = new Date();
+        const m = now.getMonth() + root.calendarMonthOffset;
+        const d = new Date(now.getFullYear(), m, root.selectedDay);
+        return root.norwegianHoliday(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+
     function openCalendar() {
         root.calendarMonthOffset = 0;
         root.calendarTick++;
+        root.selectedDay = (new Date()).getDate();
         root.calendarVisible = true;
     }
 
@@ -848,7 +923,7 @@ ShellRoot {
                                 anchors.margins: -7
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: { root.calendarMonthOffset--; root.calendarTick++; }
+                                onClicked: { root.calendarMonthOffset--; root.calendarTick++; root.selectedDay = 0; }
                             }
                         }
                         Text {
@@ -863,7 +938,7 @@ ShellRoot {
                                 anchors.margins: -7
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: { root.calendarMonthOffset = 0; root.calendarTick++; }
+                                onClicked: { root.calendarMonthOffset = 0; root.calendarTick++; root.selectedDay = (new Date()).getDate(); }
                             }
                         }
                         Text {
@@ -939,6 +1014,8 @@ ShellRoot {
                             readonly property bool isWeekend: dayOfWeek >= 5
                             readonly property bool isCurrentMonth: modelData.day !== 0
                             readonly property bool isToday: modelData.today
+                            readonly property bool isHoliday: modelData.holiday !== ""
+                            readonly property bool isSelected: dayCell.isCurrentMonth && root.selectedDay === modelData.day
 
                             // Today chip.
                             Rectangle {
@@ -963,13 +1040,26 @@ ShellRoot {
                                 Behavior on opacity { NumberAnimation { duration: 120 } }
                             }
 
+                            // Selected ring — non-today selection indicator.
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 29
+                                height: 29
+                                radius: 14
+                                color: "transparent"
+                                border.color: root.seal
+                                border.width: 1
+                                visible: dayCell.isSelected && !dayCell.isToday
+                                antialiasing: true
+                            }
+
                             Text {
                                 anchors.centerIn: parent
                                 text: dayCell.modelData.day === 0 ? "" : dayCell.modelData.day
                                 color: dayCell.isToday
                                        ? (root.seal.hsvValue < 0.5 ? root.ink : root.paper)
                                        : (dayCell.isCurrentMonth
-                                          ? (dayCell.isWeekend ? root.seal : root.ink)
+                                          ? ((dayCell.isWeekend || dayCell.isHoliday) ? root.seal : root.ink)
                                           : root.sumi)
                                 opacity: dayCell.isCurrentMonth ? 1.0 : 0.35
                                 font.family: root.mono
@@ -985,9 +1075,40 @@ ShellRoot {
                                 cursorShape: dayCell.isCurrentMonth
                                              ? Qt.PointingHandCursor
                                              : Qt.ArrowCursor
+                                onClicked: root.selectedDay = dayCell.modelData.day
                             }
                         }
                     }
+                }
+
+                // Detail row: full date for the selected day, plus the
+                // Norwegian holiday name on a second line when applicable.
+                // Hides when no selection (Column skips invisible kids).
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: root.sep
+                    visible: root.selectedDay > 0
+                }
+
+                Text {
+                    width: parent.width
+                    visible: root.selectedDay > 0
+                    text: root.selectedDayDetail
+                    color: root.ink
+                    font.family: root.mono
+                    font.pixelSize: 11
+                    font.letterSpacing: 2
+                }
+
+                Text {
+                    width: parent.width
+                    visible: root.selectedDayHoliday.length > 0
+                    text: root.selectedDayHoliday.toUpperCase()
+                    color: root.seal
+                    font.family: root.mono
+                    font.pixelSize: 11
+                    font.letterSpacing: 2
                 }
             }
         }
