@@ -70,6 +70,7 @@ ShellRoot {
     readonly property string icoDisplay: String.fromCodePoint(0xf0379)
     readonly property string icoPower:   String.fromCodePoint(0xf0425)
     readonly property string icoAether:  String.fromCodePoint(0xf03d8)
+    readonly property string icoFilm:    String.fromCodePoint(0xf0231)
 
     readonly property int barHeight: 26
 
@@ -204,6 +205,99 @@ ShellRoot {
     readonly property int screenshotPageCount: {
         if (root.screenshotFiles.length === 0) return 1;
         return Math.ceil(root.screenshotFiles.length / root.screenshotsPerPage);
+    }
+
+    // ---------- Videos popup state ----------
+    property bool videosVisible: false
+    property int videoPage: 0
+    readonly property int videosPerPage: 12
+    property var videoFiles: []
+    property int selectedVideo: -1
+
+    function openVideos() {
+        root.videoPage = 0;
+        root.selectedVideo = 0;
+        videoProbe.running = false;
+        videoProbe.running = true;
+        root.videosVisible = true;
+    }
+
+    function moveVideoSelection(delta) {
+        if (root.videoFiles.length === 0) return;
+        const visible = root.visibleVideos;
+        const next = root.selectedVideo + delta;
+        if (next < 0 && root.videoPage > 0) {
+            root.videoPage--;
+            root.selectedVideo = Math.min(
+                root.videosPerPage - 1,
+                root.videoFiles.length - root.videoPage * root.videosPerPage - 1
+            );
+        } else if (next >= visible.length && root.videoPage < root.videoPageCount - 1) {
+            root.videoPage++;
+            root.selectedVideo = 0;
+        } else if (next >= 0 && next < visible.length) {
+            root.selectedVideo = next;
+        }
+    }
+
+    function moveVideoRow(delta) {
+        const visible = root.visibleVideos;
+        const next = root.selectedVideo + delta * 4;
+        if (next >= 0 && next < visible.length) root.selectedVideo = next;
+    }
+
+    function pageVideos(delta) {
+        const next = root.videoPage + delta;
+        if (next >= 0 && next < root.videoPageCount) {
+            root.videoPage = next;
+            root.selectedVideo = 0;
+        }
+    }
+
+    function formatVideoLabel(path) {
+        const parts = String(path).split("/");
+        return parts[parts.length - 1];
+    }
+
+    function formatVideoDuration(secs) {
+        const s = Math.max(0, Math.floor(Number(secs) || 0));
+        if (s <= 0) return "";
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const ss = s % 60;
+        const pad = (n) => String(n).padStart(2, "0");
+        return h > 0 ? (h + ":" + pad(m) + ":" + pad(ss))
+                     : (m + ":" + pad(ss));
+    }
+
+    function formatVideoSize(bytes) {
+        const b = Number(bytes) || 0;
+        if (b >= 1073741824) return (b / 1073741824).toFixed(1) + " GB";
+        if (b >= 1048576)    return (b / 1048576).toFixed(0) + " MB";
+        if (b >= 1024)       return (b / 1024).toFixed(0) + " KB";
+        return b + " B";
+    }
+
+    function formatVideoMtime(secs) {
+        if (!secs) return "";
+        const d = new Date(Number(secs) * 1000);
+        const pad = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate())
+            + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+
+    readonly property var visibleVideos: {
+        if (!root.videosVisible) return [];
+        const start = root.videoPage * root.videosPerPage;
+        return root.videoFiles.slice(start, start + root.videosPerPage);
+    }
+
+    readonly property var selectedVideoEntry:
+        root.selectedVideo >= 0 ? (root.visibleVideos[root.selectedVideo] || null) : null
+
+    readonly property int videoPageCount: {
+        if (root.videoFiles.length === 0) return 1;
+        return Math.ceil(root.videoFiles.length / root.videosPerPage);
     }
 
     // ---------- Calendar popup state ----------
@@ -973,6 +1067,125 @@ ShellRoot {
         if (root.screenshotsVisible) copiedDismiss.restart();
     }
 
+    // ---------- Videos list probe ----------
+    // Cache layout: ~/.cache/quickshell-navbar/video-thumbs/<md5-of-path>.{jpg,meta}
+    // where .meta holds the integer duration in seconds. Both are
+    // re-generated when the source is newer (`-nt`); meta is what lets warm
+    // opens skip the ffprobe spawn-storm. ffmpeg/ffprobe absence is tolerated
+    // (badge hides at duration 0; cell falls back to the play glyph).
+    //
+    // Two passes: pass 1 fans out missing thumb/meta generation in parallel
+    // via xargs -P; pass 2 emits one tab-separated row per video in mtime
+    // order. Cold-open of 60 fresh videos drops from minutes to seconds on
+    // any multi-core box; warm-open is just 60 stat+cat round-trips.
+    Process {
+        id: videoProbe
+        running: false
+        command: ["bash", "-c",
+            "CDIR=\"$HOME/.cache/quickshell-navbar/video-thumbs\"; "
+          + "mkdir -p \"$CDIR\" 2>/dev/null; "
+          + "PATHS=$(find \"$HOME/Videos\" -maxdepth 3 -type f "
+              + "\\( -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.webm' "
+              + "  -o -iname '*.mov' -o -iname '*.avi' -o -iname '*.m4v' \\) "
+              + "-printf '%T@\\t%p\\n' 2>/dev/null | sort -rn | head -60 | cut -f2-); "
+          + "printf '%s\\n' \"$PATHS\" | xargs -r -d '\\n' -P \"$(nproc 2>/dev/null || echo 4)\" -I{} "
+              + "sh -c '"
+                + "path=\"$1\"; cdir=\"$2\"; "
+                + "key=$(printf %s \"$path\" | md5sum | cut -c1-32); "
+                + "thumb=\"$cdir/$key.jpg\"; meta=\"$cdir/$key.meta\"; "
+                + "if [ ! -f \"$thumb\" ] || [ \"$path\" -nt \"$thumb\" ]; then "
+                  + "command -v ffmpeg >/dev/null 2>&1 && "
+                  + "ffmpeg -y -ss 1 -i \"$path\" -frames:v 1 -vf scale=320:-1 -q:v 6 \"$thumb\" </dev/null >/dev/null 2>&1 || true; "
+                + "fi; "
+                + "if [ ! -f \"$meta\" ] || [ \"$path\" -nt \"$meta\" ]; then "
+                  + "dur=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 \"$path\" 2>/dev/null | awk \"{printf \\\"%d\\\",\\$1+0}\"); "
+                  + "printf %s \"${dur:-0}\" > \"$meta\"; "
+                + "fi"
+              + "' _ {} \"$CDIR\"; "
+          + "printf '%s\\n' \"$PATHS\" | while IFS= read -r path; do "
+              + "[ -z \"$path\" ] && continue; "
+              + "key=$(printf %s \"$path\" | md5sum | cut -c1-32); "
+              + "thumb=\"$CDIR/$key.jpg\"; "
+              + "dur=$(cat \"$CDIR/$key.meta\" 2>/dev/null); "
+              + "mtime=$(stat -c %Y \"$path\" 2>/dev/null); "
+              + "size=$(stat -c %s \"$path\" 2>/dev/null); "
+              + "printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \"$path\" \"$thumb\" \"${dur:-0}\" \"${mtime:-0}\" \"${size:-0}\"; "
+          + "done"
+        ]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const lines = this.text.trim().split("\n").filter(s => s.length > 0);
+                root.videoFiles = lines.map(line => {
+                    const f = line.split("\t");
+                    return {
+                        path: f[0] || "",
+                        thumb: f[1] || "",
+                        duration: parseInt(f[2] || "0", 10),
+                        mtime: parseInt(f[3] || "0", 10),
+                        size: parseInt(f[4] || "0", 10),
+                        label: root.formatVideoLabel(f[0] || "")
+                    };
+                });
+                if (root.videoPage >= root.videoPageCount)
+                    root.videoPage = 0;
+                root.selectedVideo = root.visibleVideos.length > 0 ? 0 : -1;
+            }
+        }
+    }
+
+    Process { id: vidCopier; running: false }
+    // copiedVideo = which path is flashing on the grid; copiedVideoMode tells
+    // the footer which payload landed (file URI vs raw bytes).
+    property string copiedVideo: ""
+    property string copiedVideoMode: ""
+    Timer {
+        id: copiedVideoReset
+        interval: 1400
+        repeat: false
+        onTriggered: { root.copiedVideo = ""; root.copiedVideoMode = ""; }
+    }
+    Timer {
+        id: copiedVideoDismiss
+        interval: 260
+        repeat: false
+        onTriggered: root.videosVisible = false
+    }
+
+    // URI-list copy. Targets: Kdenlive (Project Bin paste), file managers,
+    // GIMP, OBS, Discord/Slack/Telegram *native* (not web). wl-copy auto-
+    // promotes the payload to text/plain alongside text/uri-list, so plain
+    // text fields also receive the file URI in one call.
+    //
+    // `-n` is load-bearing: without it, wl-copy appends an LF after our CRLF,
+    // and strict text/uri-list parsers (Kdenlive) read the trailing empty
+    // line as a phantom second URI and reject the whole payload.
+    function copyVideoUri(path) {
+        const uri = "file://" + encodeURI(path);
+        vidCopier.command = ["sh", "-c",
+            "printf '%s\\r\\n' " + JSON.stringify(uri) + " | wl-copy -n --type text/uri-list"];
+        vidCopier.running = false;
+        vidCopier.running = true;
+        root.copiedVideo = path;
+        root.copiedVideoMode = "file";
+        copiedVideoReset.restart();
+        if (root.videosVisible) copiedVideoDismiss.restart();
+    }
+
+    // Byte copy under the auto-detected MIME (video/mp4, video/webm, …).
+    // Targets: web apps that accept clipboard file paste — Discord/Slack/
+    // Telegram *web*, GitHub issue editor, Notion. wl-copy holds the file
+    // bytes resident until something else replaces the clipboard, so the
+    // selection memory cost is the video's file size.
+    function copyVideoBytes(path) {
+        vidCopier.command = ["sh", "-c", "wl-copy < " + JSON.stringify(path)];
+        vidCopier.running = false;
+        vidCopier.running = true;
+        root.copiedVideo = path;
+        root.copiedVideoMode = "bytes";
+        copiedVideoReset.restart();
+        if (root.videosVisible) copiedVideoDismiss.restart();
+    }
+
     // ---------- Battery icon helper ----------
     function batteryIcon() {
         const charging = root.batState === "Charging" || root.batState === "Full";
@@ -1231,6 +1444,16 @@ ShellRoot {
                         else root.openScreenshots();
                     }
                     onRightActivated: root.run("omarchy-capture-screenshot")
+                }
+
+                Module {
+                    glyph: root.icoFilm
+                    tooltip: "Videos"
+                    onActivated: {
+                        if (root.videosVisible) root.videosVisible = false;
+                        else root.openVideos();
+                    }
+                    onRightActivated: root.run("xdg-open " + JSON.stringify(Quickshell.env("HOME") + "/Videos"))
                 }
 
                 Separator {}
@@ -1980,6 +2203,411 @@ ShellRoot {
         }
     }
 
+    // ---------- Videos popup ----------
+    PanelWindow {
+        id: videosPopup
+        visible: root.videosVisible || reveal > 0.001
+        color: "transparent"
+        anchors { top: true; bottom: true; left: true; right: true }
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "omarchy-videos"
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+
+        property real reveal: root.videosVisible ? 1 : 0
+        Behavior on reveal {
+            NumberAnimation {
+                duration: root.videosVisible ? 220 : 140
+                easing.type: root.videosVisible ? Easing.OutCubic : Easing.InCubic
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.videosVisible = false
+        }
+
+        Rectangle {
+            id: vidCard
+            anchors.centerIn: parent
+            width: 566
+            height: vidCol.implicitHeight + 34
+            color: root.bg
+            border.color: root.sep
+            border.width: 1
+            radius: 0
+
+            transformOrigin: Item.Center
+            scale: videosPopup.reveal
+
+            focus: root.videosVisible
+            Keys.onPressed: function(event) {
+                const k = event.key;
+                if (k === Qt.Key_Escape || k === Qt.Key_Q) {
+                    root.videosVisible = false;
+                } else if (k === Qt.Key_Right || k === Qt.Key_L || k === Qt.Key_Tab) {
+                    root.moveVideoSelection(1);
+                } else if (k === Qt.Key_Left || k === Qt.Key_H || k === Qt.Key_Backtab) {
+                    root.moveVideoSelection(-1);
+                } else if (k === Qt.Key_Down || k === Qt.Key_J) {
+                    root.moveVideoRow(1);
+                } else if (k === Qt.Key_Up || k === Qt.Key_K) {
+                    root.moveVideoRow(-1);
+                } else if (k === Qt.Key_N) {
+                    root.pageVideos(1);
+                } else if (k === Qt.Key_P) {
+                    root.pageVideos(-1);
+                } else if (k === Qt.Key_O || k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) {
+                    const e = root.selectedVideoEntry;
+                    if (e) {
+                        root.run("xdg-open " + JSON.stringify(e.path));
+                        root.videosVisible = false;
+                    }
+                } else if (k === Qt.Key_C) {
+                    const e = root.selectedVideoEntry;
+                    if (e) {
+                        if (event.modifiers & Qt.ShiftModifier) root.copyVideoBytes(e.path);
+                        else root.copyVideoUri(e.path);
+                    }
+                } else {
+                    return;
+                }
+                event.accepted = true;
+            }
+
+            MouseArea { anchors.fill: parent }
+
+            Column {
+                id: vidCol
+                anchors.fill: parent
+                anchors.margins: 17
+                spacing: 12
+
+                Item {
+                    width: parent.width
+                    height: 43
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+
+                        Text {
+                            text: "VIDEOS"
+                            color: root.ink
+                            font.family: root.mono
+                            font.pixelSize: 19
+                            font.letterSpacing: 4
+                            font.weight: Font.Medium
+                        }
+                        Text {
+                            text: root.videoFiles.length === 0
+                                  ? "NO RECENT VIDEOS"
+                                  : "PAGE " + (root.videoPage + 1) + " / " + root.videoPageCount
+                                    + "  ·  " + root.videoFiles.length + " TOTAL"
+                            color: root.sumi
+                            font.family: root.mono
+                            font.pixelSize: 11
+                            font.letterSpacing: 2
+                        }
+                    }
+
+                    Row {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 12
+
+                        CalendarChevron {
+                            text: "‹"
+                            opacity: root.videoPage > 0 ? 1.0 : 0.3
+                            onTriggered: {
+                                if (root.videoPage > 0) {
+                                    root.videoPage--;
+                                    root.selectedVideo = 0;
+                                }
+                            }
+                        }
+                        CalendarChevron {
+                            text: root.icoRefresh
+                            restColor: root.sumi
+                            font.pixelSize: 24
+                            onTriggered: {
+                                videoProbe.running = false;
+                                videoProbe.running = true;
+                            }
+                        }
+                        CalendarChevron {
+                            text: "›"
+                            opacity: root.videoPage < root.videoPageCount - 1 ? 1.0 : 0.3
+                            onTriggered: {
+                                if (root.videoPage < root.videoPageCount - 1) {
+                                    root.videoPage++;
+                                    root.selectedVideo = 0;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: root.sep
+                }
+
+                Text {
+                    width: parent.width
+                    height: 248
+                    visible: root.videoFiles.length === 0
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: "~/Videos/*.mp4 · mkv · webm · mov · avi · m4v"
+                    color: root.sumi
+                    font.family: root.mono
+                    font.pixelSize: 11
+                    font.letterSpacing: 2
+                    opacity: 0.6
+                }
+
+                Grid {
+                    columns: 4
+                    rowSpacing: 6
+                    columnSpacing: 6
+                    width: parent.width
+                    visible: root.videoFiles.length > 0
+
+                    Repeater {
+                        model: root.videosPerPage
+                        delegate: Item {
+                            id: vidCell
+                            required property int index
+                            readonly property var entry: root.visibleVideos[index] || null
+                            readonly property bool filled: entry !== null
+                            readonly property bool isSelected: filled && root.selectedVideo === index
+                            readonly property bool justCopied: filled && root.copiedVideo === entry.path
+
+                            width: (vidCol.width - 18) / 4
+                            height: width * 9 / 16
+
+                            Rectangle {
+                                anchors.fill: parent
+                                color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, vidCell.filled ? 0.04 : 0.02)
+                                border.color: vidCell.isSelected ? root.seal : root.sep
+                                border.width: 1
+                                antialiasing: true
+                            }
+
+                            // Thumbnail. status === Error trips the fallback
+                            // glyph below — covers ffmpeg failures and the
+                            // race window before a fresh thumb lands on disk.
+                            Image {
+                                id: vidThumb
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                visible: vidCell.filled && status === Image.Ready
+                                // cache: false because the cached thumb on
+                                // disk is overwritten when the source video
+                                // changes; QQuickPixmapCache otherwise keeps
+                                // serving the stale decode for the session.
+                                source: (vidCell.filled && root.videosVisible && vidCell.entry.thumb)
+                                        ? "file://" + vidCell.entry.thumb : ""
+                                sourceSize.width: 320
+                                sourceSize.height: 180
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                                clip: true
+                                opacity: vidMouse.containsMouse || vidCell.isSelected ? 1.0 : 0.85
+                                Behavior on opacity { NumberAnimation { duration: 140 } }
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                visible: vidCell.filled && vidThumb.status !== Image.Ready
+                                text: String.fromCodePoint(0xf040a)
+                                color: root.sumi
+                                font.family: root.mono
+                                font.pixelSize: 28
+                                opacity: 0.55
+                            }
+
+                            // Duration badge, bottom-right. Hidden if duration
+                            // is 0 (ffprobe absent or unreadable).
+                            Rectangle {
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                anchors.margins: 4
+                                width: durLabel.implicitWidth + 8
+                                height: durLabel.implicitHeight + 4
+                                color: Qt.rgba(root.paper.r, root.paper.g, root.paper.b, 0.72)
+                                visible: vidCell.filled && durLabel.text.length > 0
+                                radius: 0
+
+                                Text {
+                                    id: durLabel
+                                    anchors.centerIn: parent
+                                    text: vidCell.filled ? root.formatVideoDuration(vidCell.entry.duration) : ""
+                                    color: root.ink
+                                    font.family: root.mono
+                                    font.pixelSize: 9
+                                    font.letterSpacing: 1
+                                    font.weight: Font.Medium
+                                }
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                color: "transparent"
+                                border.color: root.seal
+                                border.width: vidMouse.containsMouse && !vidCell.isSelected ? 1 : 0
+                                visible: vidCell.filled
+                                antialiasing: true
+                                Behavior on border.width { NumberAnimation { duration: 120 } }
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 1
+                                color: Qt.rgba(root.seal.r, root.seal.g, root.seal.b, 0.28)
+                                border.color: root.seal
+                                border.width: 2
+                                visible: opacity > 0.01
+                                opacity: vidCell.justCopied ? 1 : 0
+                                antialiasing: true
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: vidCell.justCopied ? 80 : 600
+                                        easing.type: vidCell.justCopied ? Easing.OutQuad : Easing.InCubic
+                                    }
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: root.copiedVideoMode === "bytes" ? "BYTES COPIED" : "FILE COPIED"
+                                    color: root.seal.hsvValue < 0.5 ? root.ink : root.paper
+                                    font.family: root.mono
+                                    font.pixelSize: 11
+                                    font.letterSpacing: 3
+                                    font.weight: Font.Medium
+                                }
+                            }
+
+                            MouseArea {
+                                id: vidMouse
+                                anchors.fill: parent
+                                hoverEnabled: vidCell.filled
+                                enabled: vidCell.filled
+                                cursorShape: Qt.PointingHandCursor
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+
+                                // Press tracking for the click-vs-drag fork.
+                                // Once dragInitiated trips, onClicked stays
+                                // silent and the cursor release is just the
+                                // tail of the drag gesture.
+                                property point pressPos: Qt.point(0, 0)
+                                property bool dragInitiated: false
+
+                                onEntered: root.selectedVideo = vidCell.index
+                                onPressed: (e) => {
+                                    pressPos = Qt.point(e.x, e.y);
+                                    dragInitiated = false;
+                                }
+                                onPositionChanged: (e) => {
+                                    if (!pressed || dragInitiated || !vidCell.filled) return;
+                                    if (!(e.buttons & Qt.LeftButton)) return;
+                                    const dx = e.x - pressPos.x;
+                                    const dy = e.y - pressPos.y;
+                                    if (dx * dx + dy * dy < 81) return;  // 9px threshold
+                                    dragInitiated = true;
+                                    root.selectedVideo = vidCell.index;
+                                    // Hyprland blocks layer-shell surfaces
+                                    // from serving as Wayland DnD sources,
+                                    // so we hand off to dragon-drop: a tiny
+                                    // xdg-toplevel that holds the file and
+                                    // can be dragged onto any drop target.
+                                    // -x exits after one accepted drop;
+                                    // --on-top keeps the handle above
+                                    // Kdenlive while you grab it. If the
+                                    // binary is missing the popup just
+                                    // dismisses; right-click URI copy
+                                    // remains the keyboard fallback.
+                                    root.run("dragon-drop -x -T -i -s 128 "
+                                        + JSON.stringify(vidCell.entry.path));
+                                    root.videosVisible = false;
+                                }
+                                onClicked: (e) => {
+                                    if (dragInitiated) return;
+                                    root.selectedVideo = vidCell.index;
+                                    if (e.button === Qt.RightButton) {
+                                        root.copyVideoUri(vidCell.entry.path);
+                                    } else if (e.button === Qt.MiddleButton) {
+                                        root.copyVideoBytes(vidCell.entry.path);
+                                    } else {
+                                        root.run("xdg-open " + JSON.stringify(vidCell.entry.path));
+                                        root.videosVisible = false;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 1
+                    color: root.sep
+                    visible: root.selectedVideoEntry !== null
+                }
+
+                Item {
+                    width: parent.width
+                    height: 22
+                    visible: root.selectedVideoEntry !== null
+
+                    Text {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width * 0.55
+                        elide: Text.ElideMiddle
+                        text: root.selectedVideoEntry ? root.selectedVideoEntry.label : ""
+                        color: root.ink
+                        font.family: root.mono
+                        font.pixelSize: 11
+                        font.letterSpacing: 2
+                    }
+
+                    Text {
+                        readonly property bool copied: root.copiedVideo !== ""
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: {
+                            if (copied) {
+                                return root.copiedVideoMode === "bytes"
+                                    ? "VIDEO BYTES ON CLIPBOARD"
+                                    : "FILE ON CLIPBOARD";
+                            }
+                            if (!root.selectedVideoEntry) return "";
+                            const e = root.selectedVideoEntry;
+                            const bits = [];
+                            const d = root.formatVideoDuration(e.duration); if (d) bits.push(d);
+                            const s = root.formatVideoSize(e.size);         if (s) bits.push(s);
+                            const t = root.formatVideoMtime(e.mtime);       if (t) bits.push(t);
+                            return bits.join("  ·  ");
+                        }
+                        color: copied ? root.seal : root.sumi
+                        font.family: root.mono
+                        font.pixelSize: 11
+                        font.letterSpacing: 2
+                        opacity: copied ? 1.0 : 0.7
+                        Behavior on color { ColorAnimation { duration: 180 } }
+                        Behavior on opacity { NumberAnimation { duration: 180 } }
+                    }
+                }
+            }
+        }
+    }
+
     // ---------- Display popup ----------
     // Same shell as calendar/screenshots: full-screen transparent overlay
     // with a centred card that scales up from its centre. Sliders, a row of
@@ -2646,6 +3274,17 @@ ShellRoot {
         }
         function open(): void { root.openScreenshots(); }
         function close(): void { root.screenshotsVisible = false; }
+    }
+
+    // bind = SUPER, V, exec, qs ipc call videos toggle
+    IpcHandler {
+        target: "videos"
+        function toggle(): void {
+            if (root.videosVisible) root.videosVisible = false;
+            else root.openVideos();
+        }
+        function open(): void { root.openVideos(); }
+        function close(): void { root.videosVisible = false; }
     }
 
     // bind = SUPER, W, exec, qs ipc call weather toggle

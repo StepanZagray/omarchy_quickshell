@@ -73,7 +73,7 @@ The bar reads `~/.config/omarchy/current/theme/colors.toml` and remaps these key
 ```
 left   | omarchy | sep | ws1..ws10 |
 center | HH:MM |
-right  | weather | display | camera | sep | cpu | bt | wifi | audio | battery | edge |
+right  | weather | display | camera | filmstrip | sep | cpu | bt | wifi | audio | battery | edge |
 ```
 
 - Click the omarchy glyph to open the omni-menu palette. Right-click for `xdg-terminal-exec`.
@@ -82,6 +82,7 @@ right  | weather | display | camera | sep | cpu | bt | wifi | audio | battery | 
 - Click weather for the forecast popup. Right-click to force-refresh.
 - Click display for the warmth/brightness/gamma popup. Right-click resets.
 - Click camera to browse recent screenshots. Right-click captures a new one.
+- Click filmstrip to browse recent videos in `~/Videos`. Right-click opens the folder in your file manager.
 - Click the audio glyph to open `omarchy-launch-audio`. Right-click toggles mute.
 - Click battery to open the power menu.
 - Click the edge arrow to cycle the bar between top, right, bottom, left.
@@ -94,6 +95,7 @@ All popups are click-anywhere-to-dismiss overlays, keyboard-focused while open, 
 | --- | --- | --- |
 | Calendar | Click clock | Month grid with Norwegian red days, keyboard month nav, today highlight. |
 | Screenshots | Click camera | Paged thumbnails of `~/Pictures/screenshot-*.png`. Enter opens, `C` copies to clipboard. |
+| Videos | Click filmstrip | Paged thumbnails of `~/Videos/*.{mp4,mkv,webm,mov,avi,m4v}` (3 levels deep, 60 most-recent by mtime). Per-cell duration badge; footer shows duration / size / mtime. Enter opens in default player. Right-click (or `C`) copies the file as a `text/uri-list` reference. Middle-click (or `Shift+C`) copies the raw video bytes for web apps that read `clipboardData.files`. Press-and-drag a thumbnail (>9 px) hands off to `dragon-drop` so you can drop the file straight into Kdenlive's Project Bin, GIMP, browser file inputs, anywhere a drop target lives — Hyprland blocks layer-shell surfaces from initiating Wayland DnD directly, so the popup spawns dragon-drop as a tiny always-on-top handle holding the file. Requires `dragon-drop` (AUR). Thumbnails are ffmpeg-extracted at t=1s and cached under `~/.cache/quickshell-navbar/video-thumbs/` (`.jpg` for the image, `.meta` for the duration so warm opens skip ffprobe). Cold first-open does parallel ffmpeg fanout across `nproc` cores; warm opens are sub-second. |
 | Display | Click display glyph | Warmth (hyprsunset), brightness (brightnessctl), gamma sliders. Four presets, blank, reset. |
 | Weather | Click weather glyph | wttr.in current conditions, sunrise/sunset, 2-day forecast. Manual location via `~/.config/omarchy/weather/location`. |
 | Omni-menu | Click omarchy glyph | Full-screen palette fusing installed apps and omarchy-menu actions (separate config). |
@@ -115,6 +117,7 @@ External keybinds drive each popup via `qs ipc call`:
 ```
 bind = SUPER, SPACE, exec, qs ipc call palette toggle
 bind = SUPER, P,     exec, qs ipc call screenshots toggle
+bind = SUPER, V,     exec, qs ipc call videos toggle
 bind = SUPER, D,     exec, qs ipc call display toggle
 bind = SUPER, W,     exec, qs ipc call weather toggle
 ```
