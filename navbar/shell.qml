@@ -311,6 +311,82 @@ ShellRoot {
     Timer { interval: 3000; running: true; repeat: true; triggeredOnStart: true
         onTriggered: { netProbe.running = false; netProbe.running = true; } }
 
+    // ---------- Network burst detection ----------
+    // Samples cumulative rx+tx bytes from /proc/net/dev once per second.
+    // When the per-second delta crosses the threshold and the burst is
+    // armed, emits netBurst() and disarms for `burstCooldown.interval` ms
+    // so a sustained download doesn't keep retriggering — this should read
+    // as a rare event, not a continuous activity light.
+    signal netBurst()
+    property real netPrevBytes: -1
+    property bool burstArmed: false
+    // First sample after startup seeds netPrevBytes; arm only after a
+    // settling beat, otherwise the initial delta (counter vs 0) would
+    // always fire.
+    Timer { interval: 2500; running: true; repeat: false
+        onTriggered: root.burstArmed = true }
+
+    Process {
+        id: netBurstProbe
+        running: false
+        // $2 is rx_bytes, $10 is tx_bytes per /proc/net/dev's column layout.
+        // Skip loopback so localhost chatter doesn't count as "network".
+        command: ["bash", "-lc",
+            "awk 'NR>2 && $1!~/^lo:/ {s+=$2+$10} END {print s+0}' /proc/net/dev"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const cur = parseFloat(this.text.trim());
+                if (isNaN(cur)) return;
+                if (root.netPrevBytes < 0) { root.netPrevBytes = cur; return; }
+                const delta = cur - root.netPrevBytes;
+                root.netPrevBytes = cur;
+                // ~1.5 MB in a 1s sample window. Low enough that an active
+                // download or stream paints the arc regularly, high enough
+                // that idle browser chatter doesn't.
+                if (root.burstArmed && delta > 1.5 * 1024 * 1024) {
+                    root.burstArmed = false;
+                    root.netBurst();
+                    burstCooldown.restart();
+                }
+            }
+        }
+    }
+    Timer { interval: 1000; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: { netBurstProbe.running = false; netBurstProbe.running = true; } }
+    Timer { id: burstCooldown; interval: 2000; repeat: false
+        onTriggered: root.burstArmed = true }
+
+    // ---------- Idle dim ----------
+    // Polls hyprctl cursorpos at ~3Hz. If the cursor hasn't moved for
+    // idleThresholdMs the bar eases to 0.75 opacity over 4s; the next
+    // movement snaps it back over 80ms. Asymmetry is the whole point —
+    // slow fade reads ambient, fast restore reads responsive.
+    property string lastCursorPos: ""
+    property real lastMoveMs: Date.now()
+    property bool isIdle: false
+    readonly property int idleThresholdMs: 30000
+
+    Process {
+        id: cursorProbe
+        running: false
+        command: ["bash", "-lc", "hyprctl cursorpos 2>/dev/null"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const cur = this.text.trim();
+                if (!cur) return;
+                if (cur !== root.lastCursorPos) {
+                    root.lastCursorPos = cur;
+                    root.lastMoveMs = Date.now();
+                    if (root.isIdle) root.isIdle = false;
+                } else if (!root.isIdle && Date.now() - root.lastMoveMs > root.idleThresholdMs) {
+                    root.isIdle = true;
+                }
+            }
+        }
+    }
+    Timer { interval: 300; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: { cursorProbe.running = false; cursorProbe.running = true; } }
+
     // ---------- Bluetooth status ----------
     Process {
         id: btProbe
@@ -389,6 +465,16 @@ ShellRoot {
         Rectangle {
             anchors.fill: parent
             color: root.bg
+            // Idle dim — opacity falls slow on idle, snaps back on motion.
+            // Behavior reads the duration binding at change time, so the
+            // direction-dependent value picks itself up automatically.
+            opacity: root.isIdle ? 0.7 : 1.0
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: root.isIdle ? 6000 : 60
+                    easing.type: root.isIdle ? Easing.OutQuart : Easing.OutQuad
+                }
+            }
 
             // Faint 静 (stillness) mark. Pure decoration.
             Text {
@@ -513,8 +599,54 @@ ShellRoot {
                 }
 
                 Module {
+                    id: netMod
                     glyph: root.netIcon
                     onActivated: root.run("omarchy-launch-wifi")
+
+                    // Network-burst dot: traverses the wifi glyph's outermost
+                    // arc once when a heavy rx+tx burst is detected.
+                    // Geometry is eyeballed for the Nerd Font wifi icon
+                    // rendered at fontSize 12 inside the 24x26 Module slot.
+                    Item {
+                        id: arc
+                        anchors.fill: parent
+                        property real t: 0
+                        property real op: 0
+                        readonly property real cx: width / 2
+                        readonly property real cy: 17
+                        readonly property real r:  6
+
+                        Rectangle {
+                            width: 3
+                            height: 3
+                            radius: 1.5
+                            color: Qt.lighter(root.seal, 1.7)
+                            antialiasing: true
+                            opacity: arc.op
+                            x: arc.cx - arc.r * Math.cos(Math.PI * arc.t) - width / 2
+                            y: arc.cy - arc.r * Math.sin(Math.PI * arc.t) - height / 2
+                        }
+
+                        ParallelAnimation {
+                            id: arcAnim
+                            NumberAnimation {
+                                target: arc; property: "t"
+                                from: 0; to: 1
+                                duration: 700
+                                easing.type: Easing.InOutQuad
+                            }
+                            SequentialAnimation {
+                                NumberAnimation { target: arc; property: "op"; from: 0; to: 1; duration: 120; easing.type: Easing.OutQuad }
+                                PauseAnimation { duration: 380 }
+                                NumberAnimation { target: arc; property: "op"; to: 0; duration: 200; easing.type: Easing.InCubic }
+                            }
+                        }
+
+                        Connections {
+                            target: root
+                            function onNetBurst() { arc.t = 0; arcAnim.restart(); }
+                        }
+                    }
                 }
 
                 Module {
