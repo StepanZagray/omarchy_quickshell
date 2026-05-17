@@ -280,10 +280,7 @@ ShellRoot {
 
     function formatVideoMtime(secs) {
         if (!secs) return "";
-        const d = new Date(Number(secs) * 1000);
-        const pad = (n) => String(n).padStart(2, "0");
-        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate())
-            + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+        return Qt.formatDateTime(new Date(Number(secs) * 1000), "yyyy-MM-dd hh:mm");
     }
 
     readonly property var visibleVideos: {
@@ -1156,19 +1153,27 @@ ShellRoot {
     // promotes the payload to text/plain alongside text/uri-list, so plain
     // text fields also receive the file URI in one call.
     //
+    // Re-trigger vidCopier with `cmd`, then trip the cell-flash / dismiss
+    // timers under the given mode. Centralised so a future third copy
+    // mode can't forget a timer restart.
+    function _runVideoCopy(cmd, path, mode) {
+        vidCopier.command = ["sh", "-c", cmd];
+        vidCopier.running = false;
+        vidCopier.running = true;
+        root.copiedVideo = path;
+        root.copiedVideoMode = mode;
+        copiedVideoReset.restart();
+        if (root.videosVisible) copiedVideoDismiss.restart();
+    }
+
     // `-n` is load-bearing: without it, wl-copy appends an LF after our CRLF,
     // and strict text/uri-list parsers (Kdenlive) read the trailing empty
     // line as a phantom second URI and reject the whole payload.
     function copyVideoUri(path) {
         const uri = "file://" + encodeURI(path);
-        vidCopier.command = ["sh", "-c",
-            "printf '%s\\r\\n' " + JSON.stringify(uri) + " | wl-copy -n --type text/uri-list"];
-        vidCopier.running = false;
-        vidCopier.running = true;
-        root.copiedVideo = path;
-        root.copiedVideoMode = "file";
-        copiedVideoReset.restart();
-        if (root.videosVisible) copiedVideoDismiss.restart();
+        root._runVideoCopy(
+            "printf '%s\\r\\n' " + JSON.stringify(uri) + " | wl-copy -n --type text/uri-list",
+            path, "file");
     }
 
     // Byte copy under the auto-detected MIME (video/mp4, video/webm, …).
@@ -1177,13 +1182,7 @@ ShellRoot {
     // bytes resident until something else replaces the clipboard, so the
     // selection memory cost is the video's file size.
     function copyVideoBytes(path) {
-        vidCopier.command = ["sh", "-c", "wl-copy < " + JSON.stringify(path)];
-        vidCopier.running = false;
-        vidCopier.running = true;
-        root.copiedVideo = path;
-        root.copiedVideoMode = "bytes";
-        copiedVideoReset.restart();
-        if (root.videosVisible) copiedVideoDismiss.restart();
+        root._runVideoCopy("wl-copy < " + JSON.stringify(path), path, "bytes");
     }
 
     // ---------- Battery icon helper ----------
@@ -2397,9 +2396,9 @@ ShellRoot {
                                 antialiasing: true
                             }
 
-                            // Thumbnail. status === Error trips the fallback
-                            // glyph below — covers ffmpeg failures and the
-                            // race window before a fresh thumb lands on disk.
+                            // Any non-Ready status surfaces the fallback glyph
+                            // below — covers ffmpeg failures and the race
+                            // window before a fresh thumb lands on disk.
                             Image {
                                 id: vidThumb
                                 anchors.fill: parent
@@ -2431,8 +2430,6 @@ ShellRoot {
                                 opacity: 0.55
                             }
 
-                            // Duration badge, bottom-right. Hidden if duration
-                            // is 0 (ffprobe absent or unreadable).
                             Rectangle {
                                 anchors.right: parent.right
                                 anchors.bottom: parent.bottom
@@ -2501,10 +2498,6 @@ ShellRoot {
                                 cursorShape: Qt.PointingHandCursor
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
 
-                                // Press tracking for the click-vs-drag fork.
-                                // Once dragInitiated trips, onClicked stays
-                                // silent and the cursor release is just the
-                                // tail of the drag gesture.
                                 property point pressPos: Qt.point(0, 0)
                                 property bool dragInitiated: false
 
