@@ -5,6 +5,7 @@ Personal [Quickshell](https://quickshell.outfoxxed.me) configs built for [omarch
 | Module | What it does |
 | --- | --- |
 | [`navbar/`](./navbar) | Minimal top bar. Kanagawa Dragon layout, kanji workspace markers, omarchy-theme-aware colors. |
+| [`omni-menu/`](./omni-menu) | Command palette. Fuses installed apps with the omarchy-menu (Style, Setup, Install, Remove, Update, System, Toggle, Trigger, Capture, Share, Learn) in one searchable list. Metadata-driven synonyms ("wallpaper" finds Background, "reboot" finds Restart). Theme-tinted app icons. Toggle via `qs ipc`. |
 | [`song-drop/`](./song-drop) | MPRIS notifier. Drops a liquid blob from the bar on track change, morphs into a song-title pill, holds, then retreats. |
 | [`song-slide/`](./song-slide) | MPRIS notifier, snappier sibling of song-drop. Slides a sharp-cornered card in from the right with title, artist, an accent stripe, and a flush bottom-edge progress bar. Cross-fades content on rapid track changes instead of restarting the slide. |
 | [`theme-wash/`](./theme-wash) | Theme-swap flourish. On `omarchy theme set <name>`, washes the new accent across the bar from an alternating corner like ink spilling in water, with the old accent pulsing out from the centre and the new theme's name popping briefly mid-wash. |
@@ -24,6 +25,11 @@ omarchy toggle waybar
 
 # launch the bar
 qs -n -d -c navbar
+
+# launch the omni-menu command palette daemon
+qs -n -d -c omni-menu
+# then toggle it from a Hyprland keybind, e.g.:
+#   bind = SUPER, SPACE, exec, qs -c omni-menu ipc call palette toggle
 
 # launch the song-drop overlay
 qs -n -d -c song-drop
