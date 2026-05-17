@@ -68,6 +68,24 @@ ShellRoot {
 
     readonly property int barHeight: 26
 
+    // ---------- Edge ----------
+    // Which screen edge the bar lives on. Cycles top → right → bottom →
+    // left via the edge-toggle Module. Drives the bar anchors, the bar's
+    // internal flow (horizontal vs vertical Row/Column), and the direction
+    // the calendar popup unrolls from.
+    property string barEdge: "top"
+    readonly property bool isHorizontal: barEdge === "top" || barEdge === "bottom"
+    readonly property bool isLeading:    barEdge === "top" || barEdge === "left"
+
+    function cycleBarEdge() {
+        const edges = ["top", "right", "bottom", "left"];
+        root.barEdge = edges[(edges.indexOf(root.barEdge) + 1) % 4];
+    }
+
+    function edgeArrow() {
+        return ({top: "↑", right: "→", bottom: "↓", left: "←"})[root.barEdge] || "?";
+    }
+
     // ---------- State ----------
     property int activeWs: 1
     property var existingWs: [1, 2, 3, 4, 5]
@@ -463,9 +481,17 @@ ShellRoot {
     PanelWindow {
         id: bar
         color: "transparent"
-        anchors { top: true; left: true; right: true }
-        implicitHeight: root.barHeight
-        exclusiveZone: root.barHeight
+        // Anchors track barEdge — three sides anchored, the side opposite
+        // the bar's edge is left free for the bar's thickness to extend.
+        anchors {
+            top:    root.barEdge !== "bottom"
+            bottom: root.barEdge !== "top"
+            left:   root.barEdge !== "right"
+            right:  root.barEdge !== "left"
+        }
+        implicitHeight: root.isHorizontal ? root.barHeight : 0
+        implicitWidth:  root.isHorizontal ? 0 : root.barHeight
+        exclusiveZone:  root.barHeight
 
         WlrLayershell.layer: WlrLayer.Top
         WlrLayershell.namespace: "omarchy-menu"
@@ -473,9 +499,6 @@ ShellRoot {
         Rectangle {
             anchors.fill: parent
             color: root.bg
-            // Idle dim — opacity falls slow on idle, snaps back on motion.
-            // Behavior reads the duration binding at change time, so the
-            // direction-dependent value picks itself up automatically.
             opacity: root.isIdle ? 0.7 : 1.0
             Behavior on opacity {
                 NumberAnimation {
@@ -484,11 +507,14 @@ ShellRoot {
                 }
             }
 
-            // Faint 静 (stillness) mark. Pure decoration.
+            // 静 (stillness) mark, parked in the bar's trailing corner.
             Text {
-                anchors.right: parent.right
-                anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
+                anchors.right:  root.isHorizontal ? parent.right  : undefined
+                anchors.bottom: root.isHorizontal ? undefined     : parent.bottom
+                anchors.rightMargin:  root.isHorizontal ? 8 : 0
+                anchors.bottomMargin: root.isHorizontal ? 0 : 8
+                anchors.verticalCenter:   root.isHorizontal ? parent.verticalCenter   : undefined
+                anchors.horizontalCenter: root.isHorizontal ? undefined : parent.horizontalCenter
                 text: "静"
                 color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.07)
                 font.family: root.serif
@@ -497,81 +523,106 @@ ShellRoot {
                 z: 0
             }
 
-            // Bottom hairline.
+            // Inner-edge hairline (facing the rest of the screen).
             Rectangle {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
+                visible: root.isHorizontal
+                anchors.left:   parent.left
+                anchors.right:  parent.right
+                anchors.top:    root.barEdge === "bottom" ? parent.top    : undefined
+                anchors.bottom: root.barEdge === "top"    ? parent.bottom : undefined
                 height: 1
                 color: root.sep
             }
+            Rectangle {
+                visible: !root.isHorizontal
+                anchors.top:    parent.top
+                anchors.bottom: parent.bottom
+                anchors.right:  root.barEdge === "left"  ? parent.right : undefined
+                anchors.left:   root.barEdge === "right" ? parent.left  : undefined
+                width: 1
+                color: root.sep
+            }
 
-            // Centre cluster: clock + date. z is bumped above the RowLayout
-            // so the date's MouseArea isn't shadowed by the layout's
-            // fill-width spacer occupying the same screen region.
-            Row {
+            // Centre cluster: clock only, clickable. Horizontal bars show
+            // "HH:MM" on one line; vertical bars stack HH and MM.
+            Item {
+                id: clockItem
                 anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
+                anchors.verticalCenter:   parent.verticalCenter
                 z: 10
 
+                implicitWidth:  root.isHorizontal
+                                ? clockOneLine.implicitWidth + 14
+                                : Math.max(clockHH.implicitWidth, clockMM.implicitWidth) + 8
+                implicitHeight: root.isHorizontal
+                                ? clockOneLine.implicitHeight + 8
+                                : (clockHH.implicitHeight + clockMM.implicitHeight + 6)
+
+                Bloom { id: clockBloom }
+
                 Text {
-                    anchors.verticalCenter: parent.verticalCenter
+                    id: clockOneLine
+                    visible: root.isHorizontal
+                    anchors.centerIn: parent
                     text: root.hh + ":" + root.mm
-                    color: root.ink
+                    color: clockMouse.containsMouse ? root.seal : root.ink
                     font.family: root.mono
                     font.pixelSize: 12
                     font.letterSpacing: 2
                     font.weight: Font.Light
+                    Behavior on color { ColorAnimation { duration: 180 } }
                 }
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 1; height: 10
-                    color: root.sumi
-                    opacity: 0.4
+                Text {
+                    id: clockHH
+                    visible: !root.isHorizontal
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.verticalCenter
+                    anchors.bottomMargin: 1
+                    text: root.hh
+                    color: clockMouse.containsMouse ? root.seal : root.ink
+                    font.family: root.mono
+                    font.pixelSize: 11
+                    font.weight: Font.Light
+                    Behavior on color { ColorAnimation { duration: 180 } }
                 }
-                Item {
-                    id: dateItem
-                    anchors.verticalCenter: parent.verticalCenter
-                    // Pad outwards so the bloom (clipped to this item) has
-                    // room around the glyph instead of just halo-ing inside
-                    // the tight letterbox.
-                    implicitWidth: dateText.implicitWidth + 12
-                    implicitHeight: dateText.implicitHeight + 6
+                Text {
+                    id: clockMM
+                    visible: !root.isHorizontal
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.verticalCenter
+                    anchors.topMargin: 1
+                    text: root.mm
+                    color: clockMouse.containsMouse ? root.seal : root.ink
+                    font.family: root.mono
+                    font.pixelSize: 11
+                    font.weight: Font.Light
+                    Behavior on color { ColorAnimation { duration: 180 } }
+                }
 
-                    Bloom { id: dateBloom }
-
-                    Text {
-                        id: dateText
-                        anchors.centerIn: parent
-                        text: root.dd + " " + root.mon
-                        color: dateMouse.containsMouse ? root.ink : root.sumi
-                        font.family: root.mono
-                        font.pixelSize: 10
-                        font.letterSpacing: 2
-                        font.italic: true
-                        Behavior on color { ColorAnimation { duration: 180 } }
-                    }
-
-                    MouseArea {
-                        id: dateMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onEntered: dateBloom.fire(mouseX, mouseY)
-                        onClicked: {
-                            if (root.calendarVisible) root.calendarVisible = false;
-                            else root.openCalendar();
-                        }
+                MouseArea {
+                    id: clockMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: clockBloom.fire(mouseX, mouseY)
+                    onClicked: {
+                        if (root.calendarVisible) root.calendarVisible = false;
+                        else root.openCalendar();
                     }
                 }
             }
 
-            RowLayout {
+            GridLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
-                spacing: 4
+                anchors.leftMargin:   root.isHorizontal ? 10 : 0
+                anchors.rightMargin:  root.isHorizontal ? 10 : 0
+                anchors.topMargin:    root.isHorizontal ? 0  : 10
+                anchors.bottomMargin: root.isHorizontal ? 0  : 10
+                flow: root.isHorizontal ? GridLayout.LeftToRight : GridLayout.TopToBottom
+                rowSpacing: 4
+                columnSpacing: 4
+                columns: root.isHorizontal ? -1 : 1
+                rows:    root.isHorizontal ? 1  : -1
 
                 Module {
                     glyph: root.icoOmarchy
@@ -596,7 +647,10 @@ ShellRoot {
                     }
                 }
 
-                Item { Layout.fillWidth: true }
+                Item {
+                    Layout.fillWidth:  root.isHorizontal
+                    Layout.fillHeight: !root.isHorizontal
+                }
 
                 Separator {}
 
@@ -673,32 +727,34 @@ ShellRoot {
                     color: root.batVal <= 10 ? root.seal : root.batVal <= 20 ? root.indigo : root.ink
                     onActivated: root.run("omarchy-menu power")
                 }
+
+                // Edge toggle — click to cycle top → right → bottom → left.
+                // The arrow shows the current edge.
+                Module {
+                    glyph: root.edgeArrow()
+                    color: root.sumi
+                    fontSize: 12
+                    onActivated: root.cycleBarEdge()
+                }
             }
         }
     }
 
     // ---------- Calendar popup ----------
-    // Overlay layer that floats below the bar. ExclusionMode.Ignore so the
-    // panel doesn't reserve screen real estate. The card unfolds from the
-    // date pill: a thin seal thread descends from the bar, then a y-axis
-    // Scale transform unrolls the card downward. Asymmetric open/close
-    // (220ms OutCubic / 140ms InCubic) makes the motion feel weighted.
+    // Full-screen transparent overlay. The card sits dead-centre on the
+    // screen regardless of barEdge and scales up from its centre.
+    // Keyboard focus is exclusive so Esc / Q close it without first
+    // clicking inside; clicking anywhere outside the card also dismisses.
     PanelWindow {
         id: calendarPopup
-        // Stay alive while the close animation plays; once reveal decays
-        // below the threshold the layer surface tears down.
         visible: root.calendarVisible || reveal > 0.001
         color: "transparent"
-        anchors { top: true; left: true; right: true }
-        implicitHeight: root.barHeight + 320
+        anchors { top: true; bottom: true; left: true; right: true }
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "omarchy-calendar"
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
-        // Single driver — reveal animates 0↔1, asymmetric on direction.
-        // Behavior reads its duration/easing at change-time, so the
-        // bindings pick the right values automatically from the new
-        // calendarVisible state.
         property real reveal: root.calendarVisible ? 1 : 0
         Behavior on reveal {
             NumberAnimation {
@@ -712,68 +768,46 @@ ShellRoot {
             onClicked: root.calendarVisible = false
         }
 
-        // The thread — 1px seal line that drops from just below the bar,
-        // tethering the card to the date in the bar.
-        Rectangle {
-            id: thread
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: root.barHeight - 1
-            width: 1
-            height: 14 * calendarPopup.reveal
-            color: root.seal
-            opacity: calendarPopup.reveal
-            antialiasing: true
-        }
-
-        // Stitch where the thread meets the card.
-        Rectangle {
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: thread.y + thread.height - 1
-            width: 3
-            height: 3
-            radius: 1.5
-            color: root.seal
-            opacity: calendarPopup.reveal
-            antialiasing: true
-        }
-
         Rectangle {
             id: card
-            anchors.top: thread.bottom
-            anchors.topMargin: 2
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: 268
-            height: cardCol.implicitHeight + 28
+            anchors.centerIn: parent
+            width: 322
+            height: cardCol.implicitHeight + 34
             color: root.bg
             border.color: root.sep
             border.width: 1
             radius: 0
 
-            // y-axis unfold from the top edge (the thread origin). Layout
-            // height stays constant; only rendered geometry collapses, so
-            // there's no reflow during the animation.
-            transform: Scale {
-                origin.x: card.width / 2
-                origin.y: 0
-                xScale: 1
-                yScale: calendarPopup.reveal
+            // Uniform scale from centre — same animation in/out, no
+            // direction dependence.
+            transformOrigin: Item.Center
+            scale: calendarPopup.reveal
+
+            // Take keyboard focus while visible so Esc / Q close without
+            // needing a prior click.
+            focus: root.calendarVisible
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_Escape || event.key === Qt.Key_Q) {
+                    root.calendarVisible = false;
+                    event.accepted = true;
+                }
             }
 
-            // Swallow clicks on the card so they don't bubble to the outer
-            // dismiss area.
+            // Swallow clicks on the card so they don't bubble to the
+            // outer dismiss area.
             MouseArea { anchors.fill: parent }
 
             Column {
                 id: cardCol
                 anchors.fill: parent
-                anchors.margins: 14
-                spacing: 10
+                anchors.margins: 17
+                spacing: 12
 
                 // Header: month label on the left, year underneath; prev /
                 // today-reset / next chevrons on the right.
                 Item {
                     width: parent.width
-                    height: 36
+                    height: 43
 
                     Column {
                         anchors.left: parent.left
@@ -784,15 +818,15 @@ ShellRoot {
                             text: root.calendarMonthName
                             color: root.ink
                             font.family: root.mono
-                            font.pixelSize: 14
-                            font.letterSpacing: 3
+                            font.pixelSize: 19
+                            font.letterSpacing: 4
                             font.weight: Font.Medium
                         }
                         Text {
                             text: root.calendarYear
                             color: root.sumi
                             font.family: root.mono
-                            font.pixelSize: 10
+                            font.pixelSize: 13
                             font.letterSpacing: 2
                         }
                     }
@@ -800,18 +834,18 @@ ShellRoot {
                     Row {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: 10
+                        spacing: 12
 
                         Text {
                             text: "‹"
                             color: prevMouse.containsMouse ? root.seal : root.ink
                             font.family: root.mono
-                            font.pixelSize: 18
+                            font.pixelSize: 24
                             Behavior on color { ColorAnimation { duration: 120 } }
                             MouseArea {
                                 id: prevMouse
                                 anchors.fill: parent
-                                anchors.margins: -6
+                                anchors.margins: -7
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: { root.calendarMonthOffset--; root.calendarTick++; }
@@ -821,12 +855,12 @@ ShellRoot {
                             text: "•"
                             color: todayMouse.containsMouse ? root.seal : root.sumi
                             font.family: root.mono
-                            font.pixelSize: 14
+                            font.pixelSize: 19
                             Behavior on color { ColorAnimation { duration: 120 } }
                             MouseArea {
                                 id: todayMouse
                                 anchors.fill: parent
-                                anchors.margins: -6
+                                anchors.margins: -7
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: { root.calendarMonthOffset = 0; root.calendarTick++; }
@@ -836,12 +870,12 @@ ShellRoot {
                             text: "›"
                             color: nextMouse.containsMouse ? root.seal : root.ink
                             font.family: root.mono
-                            font.pixelSize: 18
+                            font.pixelSize: 24
                             Behavior on color { ColorAnimation { duration: 120 } }
                             MouseArea {
                                 id: nextMouse
                                 anchors.fill: parent
-                                anchors.margins: -6
+                                anchors.margins: -7
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: { root.calendarMonthOffset++; root.calendarTick++; }
@@ -869,14 +903,14 @@ ShellRoot {
                             required property string modelData
                             required property int index
                             width: cardCol.width / 7
-                            height: 18
+                            height: 22
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData
                                 color: index >= 5 ? root.seal : root.sumi
                                 opacity: index >= 5 ? 0.85 : 0.7
                                 font.family: root.mono
-                                font.pixelSize: 9
+                                font.pixelSize: 12
                                 font.letterSpacing: 2
                             }
                         }
@@ -899,7 +933,7 @@ ShellRoot {
                             required property var modelData
                             required property int index
                             width: cardCol.width / 7
-                            height: 28
+                            height: 34
 
                             readonly property int  dayOfWeek: index % 7
                             readonly property bool isWeekend: dayOfWeek >= 5
@@ -909,9 +943,9 @@ ShellRoot {
                             // Today chip.
                             Rectangle {
                                 anchors.centerIn: parent
-                                width: 24
-                                height: 24
-                                radius: 12
+                                width: 29
+                                height: 29
+                                radius: 14
                                 color: root.seal
                                 visible: dayCell.isToday
                                 antialiasing: true
@@ -920,9 +954,9 @@ ShellRoot {
                             // Hover halo on regular cells.
                             Rectangle {
                                 anchors.centerIn: parent
-                                width: 24
-                                height: 24
-                                radius: 12
+                                width: 29
+                                height: 29
+                                radius: 14
                                 color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.08)
                                 visible: dayMouse.containsMouse && !dayCell.isToday && dayCell.isCurrentMonth
                                 antialiasing: true
@@ -939,7 +973,7 @@ ShellRoot {
                                           : root.sumi)
                                 opacity: dayCell.isCurrentMonth ? 1.0 : 0.35
                                 font.family: root.mono
-                                font.pixelSize: 11
+                                font.pixelSize: 15
                                 font.weight: dayCell.isToday ? Font.Medium : Font.Light
                             }
 
@@ -961,11 +995,13 @@ ShellRoot {
 
     // ---------- Components ----------
     component Separator: Rectangle {
-        Layout.alignment: Qt.AlignVCenter
-        Layout.preferredWidth: 1
-        Layout.preferredHeight: 12
-        Layout.leftMargin: 4
-        Layout.rightMargin: 4
+        Layout.alignment: root.isHorizontal ? Qt.AlignVCenter : Qt.AlignHCenter
+        Layout.preferredWidth:  root.isHorizontal ? 1  : 12
+        Layout.preferredHeight: root.isHorizontal ? 12 : 1
+        Layout.leftMargin:   root.isHorizontal ? 4 : 0
+        Layout.rightMargin:  root.isHorizontal ? 4 : 0
+        Layout.topMargin:    root.isHorizontal ? 0 : 4
+        Layout.bottomMargin: root.isHorizontal ? 0 : 4
         color: root.sep
     }
 
@@ -1028,14 +1064,13 @@ ShellRoot {
         signal activated()
         signal rightActivated()
 
-        Layout.alignment: Qt.AlignVCenter
-        Layout.preferredWidth: 24
-        Layout.preferredHeight: root.barHeight
+        Layout.alignment: root.isHorizontal ? Qt.AlignVCenter : Qt.AlignHCenter
+        Layout.preferredWidth:  root.isHorizontal ? 24 : root.barHeight
+        Layout.preferredHeight: root.isHorizontal ? root.barHeight : 24
 
         Rectangle {
             anchors.fill: parent
-            anchors.topMargin: 3
-            anchors.bottomMargin: 3
+            anchors.margins: 3
             radius: 0
             color: mouse.containsMouse ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.08) : "transparent"
             Behavior on color { ColorAnimation { duration: 180 } }
@@ -1074,18 +1109,20 @@ ShellRoot {
         property bool present: false
         signal activated()
 
-        Layout.alignment: Qt.AlignVCenter
-        Layout.preferredWidth: 20
-        Layout.preferredHeight: root.barHeight
+        Layout.alignment: root.isHorizontal ? Qt.AlignVCenter : Qt.AlignHCenter
+        Layout.preferredWidth:  root.isHorizontal ? 20 : root.barHeight
+        Layout.preferredHeight: root.isHorizontal ? root.barHeight : 20
 
-        // On becoming active, snap the kanji 2px in the direction of travel
-        // (carousel-style: going right enters from the right, eases left),
-        // then ease back to centre. The snap bypasses the Behavior by going
-        // through an explicit NumberAnimation.
         onActiveChanged: {
             if (active && root.lastDirection !== 0) {
                 slideHome.stop();
-                kanji.slideX = root.lastDirection * 2;
+                if (root.isHorizontal) {
+                    kanji.slideX = root.lastDirection * 2;
+                    kanji.slideY = 0;
+                } else {
+                    kanji.slideY = root.lastDirection * 2;
+                    kanji.slideX = 0;
+                }
                 slideHome.start();
             }
         }
@@ -1093,7 +1130,7 @@ ShellRoot {
         NumberAnimation {
             id: slideHome
             target: kanji
-            property: "slideX"
+            properties: "slideX,slideY"
             to: 0
             duration: 180
             easing.type: Easing.OutCubic
@@ -1104,9 +1141,11 @@ ShellRoot {
         Text {
             id: kanji
             property real slideX: 0
+            property real slideY: 0
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.horizontalCenterOffset: slideX
             anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenterOffset: slideY
             text: label
             color: active ? root.seal : (present ? root.ink : root.sumi)
             opacity: active ? 1.0 : (present ? 0.75 : 0.35)
