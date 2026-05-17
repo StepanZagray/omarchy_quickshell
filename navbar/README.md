@@ -27,10 +27,13 @@ Reload the Hyprland session (or run `omarchy-hook post-boot`) and the bar will a
 | Package | Why |
 | --- | --- |
 | quickshell | The runtime that loads `shell.qml`. |
-| hyprland | Provides `hyprctl` for workspace state and active workspace. |
+| hyprland | Provides `hyprctl` for workspace state, active workspace, hyprsunset. |
 | pamixer | Audio mute query. |
 | bluetoothctl | Bluetooth power and connection state. |
 | nmcli | Wifi signal strength when no ethernet is up. |
+| brightnessctl | Backlight slider in the display popup. |
+| hyprsunset | Color temperature + gamma in the display popup. Auto-started on first slider touch. |
+| jq, curl | Weather popup data fetch from wttr.in. |
 | omarchy | For the theme file at `~/.config/omarchy/current/theme/colors.toml`. |
 
 ## Toggle waybar
@@ -68,15 +71,55 @@ The bar reads `~/.config/omarchy/current/theme/colors.toml` and remaps these key
 ## Layout
 
 ```
-left   | omarchy icon | sep | ws1 ws2 ws3 ws4 ws5 ws6 ws7 ws8 ws9 ws10 |
-center | HH:MM | DD MON |
-right  | cpu | net | bt | audio | battery |
+left   | omarchy | sep | ws1..ws10 |
+center | HH:MM |
+right  | weather | display | camera | sep | cpu | bt | wifi | audio | battery | edge |
 ```
 
-- Click the omarchy glyph to open `omarchy-menu`. Right-click for `xdg-terminal-exec`.
+- Click the omarchy glyph to open the omni-menu palette. Right-click for `xdg-terminal-exec`.
+- Click the clock to open the calendar popup.
 - Click a kanji to `hyprctl dispatch workspace N`.
+- Click weather for the forecast popup. Right-click to force-refresh.
+- Click display for the warmth/brightness/gamma popup. Right-click resets.
+- Click camera to browse recent screenshots. Right-click captures a new one.
 - Click the audio glyph to open `omarchy-launch-audio`. Right-click toggles mute.
 - Click battery to open the power menu.
+- Click the edge arrow to cycle the bar between top, right, bottom, left.
+
+## Popups
+
+All popups are click-anywhere-to-dismiss overlays, keyboard-focused while open, and follow the same Kanagawa Dragon palette as the bar.
+
+| Popup | Trigger | What it does |
+| --- | --- | --- |
+| Calendar | Click clock | Month grid with Norwegian red days, keyboard month nav, today highlight. |
+| Screenshots | Click camera | Paged thumbnails of `~/Pictures/screenshot-*.png`. Enter opens, `C` copies to clipboard. |
+| Display | Click display glyph | Warmth (hyprsunset), brightness (brightnessctl), gamma sliders. Four presets, blank, reset. |
+| Weather | Click weather glyph | wttr.in current conditions, sunrise/sunset, 2-day forecast. Manual location via `~/.config/omarchy/weather/location`. |
+| Omni-menu | Click omarchy glyph | Full-screen palette fusing installed apps and omarchy-menu actions (separate config). |
+
+## Weather location
+
+Defaults to wttr.in's IP geolocation. Override by writing a single line to `~/.config/omarchy/weather/location`:
+
+```
+Oslo
+```
+
+Or any of: `City, Country` | `LHR` (IATA) | `94103` (zip) | `60.42,11.24` (lat,lon). Click the subtitle inside the weather popup to open the file in your editor. The bar re-fetches on save.
+
+## IPC
+
+External keybinds drive each popup via `qs ipc call`:
+
+```
+bind = SUPER, SPACE, exec, qs ipc call palette toggle
+bind = SUPER, P,     exec, qs ipc call screenshots toggle
+bind = SUPER, D,     exec, qs ipc call display toggle
+bind = SUPER, W,     exec, qs ipc call weather toggle
+```
+
+`refresh`, `open`, `close`, `reset`, and `blank` are also exposed where relevant.
 
 ## Customization
 

@@ -4,7 +4,7 @@ Personal [Quickshell](https://quickshell.outfoxxed.me) configs built for [omarch
 
 | Module | What it does |
 | --- | --- |
-| [`navbar/`](./navbar) | Minimal top bar. Kanagawa Dragon layout, kanji workspace markers, omarchy-theme-aware colors. |
+| [`navbar/`](./navbar) | Minimal top bar. Kanagawa Dragon layout, kanji workspace markers, omarchy-theme-aware colors. Click-through popups for calendar, screenshots, display (warmth/brightness/gamma), and weather (wttr.in, manual location override). |
 | [`omni-menu/`](./omni-menu) | Command palette. Fuses installed apps with the omarchy-menu (Style, Setup, Install, Remove, Update, System, Toggle, Trigger, Capture, Share, Learn) in one searchable list. Metadata-driven synonyms ("wallpaper" finds Background, "reboot" finds Restart). Theme-tinted app icons. Toggle via `qs ipc`. |
 | [`song-drop/`](./song-drop) | MPRIS notifier. Drops a liquid blob from the bar on track change, morphs into a song-title pill, holds, then retreats. |
 | [`song-slide/`](./song-slide) | MPRIS notifier, snappier sibling of song-drop. Slides a sharp-cornered card in from the right with title, artist, an accent stripe, and a flush bottom-edge progress bar. Cross-fades content on rapid track changes instead of restarting the slide. |
@@ -60,7 +60,7 @@ For per-module setup (autostart hooks, theme reactivity details, customization k
 - hyprland
 - omarchy (for the live theme palette and the `omarchy toggle waybar` flow)
 
-navbar also wants `pamixer`, `bluetoothctl`, and `nmcli` for its telemetry tiles. song-drop only needs an MPRIS-capable player (mpv, spotify, etc.). music-wallpaper needs [`cliamp`](https://github.com/bjarneo/cliamp) on `PATH` for its `visstream` NDJSON feed. clipboard-ripple needs `wl-clipboard` (for `wl-paste`) and `python3` for the cursor/monitor query.
+navbar also wants `pamixer`, `bluetoothctl`, and `nmcli` for telemetry tiles, plus `brightnessctl` and `hyprsunset` for the display popup and `jq` + `curl` for the weather popup. song-drop only needs an MPRIS-capable player (mpv, spotify, etc.). music-wallpaper needs [`cliamp`](https://github.com/bjarneo/cliamp) on `PATH` for its `visstream` NDJSON feed. clipboard-ripple needs `wl-clipboard` (for `wl-paste`) and `python3` for the cursor/monitor query.
 
 ## License
 
