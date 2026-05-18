@@ -170,7 +170,7 @@ PanelWindow {
                 color: bar.root.seal
                 fontFamily: "omarchy"
                 fontSize: 14
-                onActivated: bar.root.run("qs -c omni-menu ipc call palette toggle")
+                onActivated: bar.root.run(Quickshell.env("HOME") + "/.config/quickshell/omni-menu/toggle.sh")
                 onRightActivated: bar.root.run("xdg-terminal-exec")
             }
 
