@@ -52,13 +52,12 @@ ShellRoot {
     readonly property string mono:  "JetBrainsMono Nerd Font"
     readonly property string serif: "serif"
 
-    // .desktop scanner — one-shot at startup, refreshable via IPC.
-    // Annotated apps land on `appScan.apps`; `allItems` rebinds when they
-    // arrive so the pool is always omarchy actions + scanned apps.
-    AppScan {
-        id: appScan
-        onScanned: root.allItems = root.omarchy.concat(appScan.apps)
-    }
+    // Sources that feed `allItems`. AppScan reads .desktop files;
+    // NavbarApps probes the navbar shell for its IpcHandler widgets and
+    // surfaces only the ones it actually exposes (so users on a
+    // navbar-less setup see nothing instead of broken rows).
+    AppScan { id: appScan }
+    NavbarApps { id: navbarApps }
     readonly property alias appsLoaded: appScan.loaded
 
     // ---------- Visibility / state ----------
@@ -172,7 +171,7 @@ ShellRoot {
     // 200+ entry array on unrelated property touches.
     property var omarchy: []
     property var nav: []
-    property var allItems: []
+    readonly property var allItems: root.omarchy.concat(appScan.apps).concat(navbarApps.items)
 
     // ---------- Launcher ----------
     // Matches omarchy's launch convention (see omarchy-launch-or-focus):
@@ -317,7 +316,6 @@ ShellRoot {
     Component.onCompleted: {
         root.omarchy = Data.annotate(Data.omarchyItems);
         root.nav     = Data.annotate(Data.categoryNav);
-        root.allItems = root.omarchy.slice();
     }
 
     // ---------- IPC ----------
