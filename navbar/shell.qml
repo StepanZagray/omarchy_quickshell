@@ -71,6 +71,7 @@ ShellRoot {
     readonly property string icoPower:   String.fromCodePoint(0xf0425)
     readonly property string icoAether:  String.fromCodePoint(0xf03d8)
     readonly property string icoFilm:    String.fromCodePoint(0xf0231)
+    readonly property string icoSearch:  String.fromCodePoint(0xf0349)
 
     readonly property int barHeight: 26
 
@@ -314,8 +315,21 @@ ShellRoot {
     property var  aetherBlueprints: []
     property int  selectedAether: -1
     property bool aetherLoading: false
+    property string aetherQuery: ""
+
+    // Case-insensitive substring filter on blueprint name. With 100+ saved
+    // themes a small inline search is the only way to land on one in a
+    // single keystroke or two.
+    readonly property var aetherFiltered: {
+        const q = root.aetherQuery.toLowerCase();
+        if (q === "") return root.aetherBlueprints;
+        return root.aetherBlueprints.filter(b =>
+            String(b.name || "").toLowerCase().indexOf(q) !== -1
+        );
+    }
 
     function openAether() {
+        root.aetherQuery = "";
         root.selectedAether = 0;
         root.aetherLoading = true;
         aetherProbe.running = false;
@@ -323,19 +337,30 @@ ShellRoot {
         root.aetherVisible = true;
     }
 
-    function moveAetherSelection(delta) {
-        const n = root.aetherBlueprints.length;
-        if (n === 0) return;
-        const next = root.selectedAether + delta;
-        if (next < 0) root.selectedAether = 0;
-        else if (next >= n) root.selectedAether = n - 1;
-        else root.selectedAether = next;
+    function moveAetherSelection(delta, wrap) {
+        const n = root.aetherFiltered.length;
+        if (n === 0) { root.selectedAether = -1; return; }
+        const cur = root.selectedAether < 0 ? 0 : root.selectedAether;
+        let next = cur + delta;
+        if (wrap) {
+            next = ((next % n) + n) % n;
+        } else {
+            if (next < 0) next = 0;
+            else if (next >= n) next = n - 1;
+        }
+        root.selectedAether = next;
     }
 
     function applyAetherBlueprint(name) {
         if (!name) return;
         root.run("aether --apply-blueprint " + JSON.stringify(name));
         root.aetherVisible = false;
+    }
+
+    // Snap selection back to the top whenever the filter changes, so the
+    // first match is always primed for Enter without a fresh j-press.
+    onAetherQueryChanged: {
+        root.selectedAether = root.aetherFiltered.length > 0 ? 0 : -1;
     }
 
     // ---------- Calendar popup state ----------
@@ -2761,23 +2786,51 @@ ShellRoot {
             focus: root.aetherVisible
             Keys.onPressed: function(event) {
                 const k = event.key;
-                if (k === Qt.Key_Escape || k === Qt.Key_Q) {
+                const mods = event.modifiers;
+                // The popup doubles as a search field — only Esc unconditionally
+                // dismisses; printable keys feed the filter so single-letter
+                // mnemonics (g, r) land in the query instead of firing actions.
+                if (k === Qt.Key_Escape) {
                     root.aetherVisible = false;
-                } else if (k === Qt.Key_Down || k === Qt.Key_J) {
-                    root.moveAetherSelection(1);
+                } else if (k === Qt.Key_Down
+                           || (k === Qt.Key_Tab && !(mods & Qt.ShiftModifier))) {
+                    root.moveAetherSelection(1, true);
                     aetherList.positionViewAtIndex(root.selectedAether, ListView.Contain);
-                } else if (k === Qt.Key_Up || k === Qt.Key_K) {
-                    root.moveAetherSelection(-1);
+                } else if (k === Qt.Key_Up
+                           || k === Qt.Key_Backtab
+                           || (k === Qt.Key_Tab && (mods & Qt.ShiftModifier))) {
+                    root.moveAetherSelection(-1, true);
                     aetherList.positionViewAtIndex(root.selectedAether, ListView.Contain);
-                } else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) {
-                    const e = root.aetherBlueprints[root.selectedAether];
+                } else if (k === Qt.Key_PageDown) {
+                    root.moveAetherSelection(8, false);
+                    aetherList.positionViewAtIndex(root.selectedAether, ListView.Contain);
+                } else if (k === Qt.Key_PageUp) {
+                    root.moveAetherSelection(-8, false);
+                    aetherList.positionViewAtIndex(root.selectedAether, ListView.Contain);
+                } else if (k === Qt.Key_Home) {
+                    if (root.aetherFiltered.length > 0) {
+                        root.selectedAether = 0;
+                        aetherList.positionViewAtIndex(0, ListView.Beginning);
+                    }
+                } else if (k === Qt.Key_End) {
+                    const n = root.aetherFiltered.length;
+                    if (n > 0) {
+                        root.selectedAether = n - 1;
+                        aetherList.positionViewAtIndex(n - 1, ListView.End);
+                    }
+                } else if (k === Qt.Key_Return || k === Qt.Key_Enter) {
+                    const e = root.aetherFiltered[root.selectedAether];
                     if (e) root.applyAetherBlueprint(e.name);
-                } else if (k === Qt.Key_G) {
-                    root.run("aether");
-                    root.aetherVisible = false;
-                } else if (k === Qt.Key_R) {
-                    root.run("sh -c 'aether --generate \"$(aether --random-wallpaper)\"'");
-                    root.aetherVisible = false;
+                } else if (k === Qt.Key_Backspace) {
+                    if (root.aetherQuery.length > 0)
+                        root.aetherQuery = root.aetherQuery.slice(0, -1);
+                } else if (event.text && event.text.length === 1) {
+                    const ch = event.text;
+                    if (ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) !== 127) {
+                        root.aetherQuery += ch;
+                    } else {
+                        return;
+                    }
                 } else {
                     return;
                 }
@@ -2811,15 +2864,76 @@ ShellRoot {
                             font.weight: Font.Medium
                         }
                         Text {
-                            text: root.aetherLoading
-                                  ? "LOADING…"
-                                  : (root.aetherBlueprints.length === 0
-                                     ? "NO BLUEPRINTS"
-                                     : root.aetherBlueprints.length + " BLUEPRINTS")
+                            text: {
+                                if (root.aetherLoading) return "LOADING…";
+                                const total = root.aetherBlueprints.length;
+                                if (total === 0) return "NO BLUEPRINTS";
+                                const shown = root.aetherFiltered.length;
+                                if (root.aetherQuery === "")
+                                    return total + " BLUEPRINTS";
+                                return shown === 0
+                                    ? "NO MATCHES"
+                                    : shown + " / " + total + " MATCH"
+                                      + (shown === 1 ? "" : "ES");
+                            }
                             color: root.sumi
                             font.family: root.mono
                             font.pixelSize: 11
                             font.letterSpacing: 2
+                        }
+                    }
+                }
+
+                Rectangle { width: parent.width; height: 1; color: root.sep }
+
+                // Search row. Mirrors omni-menu: magnifier glyph, live query
+                // text, and a blinking caret. There is no real TextInput —
+                // the card's Keys.onPressed funnels characters into
+                // root.aetherQuery, which keeps focus management simple.
+                Item {
+                    width: parent.width
+                    height: 28
+
+                    Text {
+                        id: aetherSearchGlyph
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.icoSearch
+                        color: root.seal
+                        font.family: root.mono
+                        font.pixelSize: 14
+                    }
+
+                    Text {
+                        id: aetherQueryText
+                        anchors.left: aetherSearchGlyph.right
+                        anchors.leftMargin: 10
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.aetherQuery.length === 0
+                              ? "Filter blueprints…"
+                              : root.aetherQuery
+                        color: root.aetherQuery.length === 0 ? root.sumi : root.ink
+                        opacity: root.aetherQuery.length === 0 ? 0.5 : 1.0
+                        font.family: root.mono
+                        font.pixelSize: 12
+                        font.letterSpacing: 1
+                    }
+
+                    Rectangle {
+                        id: aetherCaret
+                        width: 2
+                        height: 14
+                        color: root.seal
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: root.aetherQuery.length === 0
+                           ? aetherSearchGlyph.x + aetherSearchGlyph.width + 10
+                           : aetherQueryText.x + aetherQueryText.contentWidth + 2
+                        visible: root.aetherVisible
+                        SequentialAnimation on opacity {
+                            running: root.aetherVisible
+                            loops: Animation.Infinite
+                            NumberAnimation { from: 1; to: 0.2; duration: 600; easing.type: Easing.InOutSine }
+                            NumberAnimation { from: 0.2; to: 1; duration: 600; easing.type: Easing.InOutSine }
                         }
                     }
                 }
@@ -2831,7 +2945,7 @@ ShellRoot {
                     width: parent.width
                     height: 360
                     clip: true
-                    model: root.aetherBlueprints
+                    model: root.aetherFiltered
                     spacing: 0
                     currentIndex: root.selectedAether
                     boundsBehavior: Flickable.StopAtBounds
@@ -2947,7 +3061,7 @@ ShellRoot {
 
                 Text {
                     width: parent.width
-                    text: "ENTER APPLY  ·  G GUI  ·  R RANDOM  ·  Q/ESC CLOSE"
+                    text: "TYPE TO FILTER  ·  TAB ↑↓ NAV  ·  ↵ APPLY  ·  ESC CLOSE"
                     color: root.sumi
                     font.family: root.mono
                     font.pixelSize: 10
