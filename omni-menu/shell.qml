@@ -928,6 +928,20 @@ ShellRoot {
         function refresh(): void { appScan.running = false; appScan.running = true; }
     }
 
+    // ---------- Idle self-exit ----------
+    // Daemon exits after the palette has been closed for this long, so it
+    // doesn't sit resident overnight. The toggle.sh wrapper cold-starts it
+    // again on the next SUPER+SPACE or navbar click. Reset whenever the
+    // palette is visible.
+    readonly property int idleTimeoutMs: 5 * 60 * 1000
+    Timer {
+        id: idleTimer
+        interval: root.idleTimeoutMs
+        running: !root.visible_
+        repeat: false
+        onTriggered: Qt.quit()
+    }
+
     // ---------- Panel ----------
     PanelWindow {
         id: panel
