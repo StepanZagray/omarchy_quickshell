@@ -125,23 +125,13 @@ Parsing lives in `Palette.js`:
 # (whatever else the hook does — cava reload, etc.)
 
 # Parse colors.toml once into JSON and push to every listener.
+# tomlq ships with the `yq` package; same jq syntax, TOML input.
 theme_name="$(cat "$HOME/.config/omarchy/current/theme.name" 2>/dev/null)"
 colors_file="$HOME/.config/omarchy/current/theme/colors.toml"
 
-payload="$(python3 - "$theme_name" "$colors_file" <<'PY' 2>/dev/null
-import json, re, sys
-name, path = sys.argv[1], sys.argv[2]
-colors = {}
-try:
-    with open(path) as f:
-        for line in f:
-            m = re.match(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]+)"', line)
-            if m: colors[m.group(1).lower()] = m.group(2)
-except OSError:
-    pass
-print(json.dumps({"name": name, "colors": colors}, separators=(",", ":")))
-PY
-)"
+payload="$(tomlq -c --arg name "$theme_name" \
+    '{name: $name, colors: (with_entries(.key |= ascii_downcase))}' \
+    "$colors_file" 2>/dev/null)"
 
 if [ -n "$payload" ]; then
     dbus-send --session --type=signal /org/omarchy/Theme \
@@ -275,6 +265,7 @@ qs -n -d -c desktop
 | brightnessctl | Backlight slider in the display popup. |
 | hyprsunset | Color temperature and gamma in the display popup. |
 | jq, curl | Weather popup data fetch from wttr.in. |
+| yq | Provides `tomlq` for the theme-set hook's TOML-to-JSON pass. |
 | fd, gh | File search and GitHub repo search drill-downs (optional). |
 | dragon-drop | Drag-and-drop hand-off for the videos popup (optional, AUR). |
 
