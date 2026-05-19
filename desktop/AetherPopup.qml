@@ -74,13 +74,13 @@ CardWindow {
         if (aetherPopup.wallhavenMode) {
             // 4-col grid: ←/→ step by 1, ↑/↓ step by 4 (cols).
             const followSel = () => wallhavenGrid.positionViewAtIndex(wallhaven.selectedIndex, GridView.Contain);
-            if (k === Qt.Key_Right || k === Qt.Key_L) {
+            if (k === Qt.Key_Right) {
                 wallhaven.moveSelection(1); followSel();
-            } else if (k === Qt.Key_Left || k === Qt.Key_H) {
+            } else if (k === Qt.Key_Left) {
                 wallhaven.moveSelection(-1); followSel();
-            } else if (k === Qt.Key_Down || k === Qt.Key_J) {
+            } else if (k === Qt.Key_Down) {
                 wallhaven.moveSelection(4); followSel();
-            } else if (k === Qt.Key_Up || k === Qt.Key_K) {
+            } else if (k === Qt.Key_Up) {
                 wallhaven.moveSelection(-4); followSel();
             } else if (k === Qt.Key_Home) {
                 wallhavenGrid.positionViewAtBeginning();
