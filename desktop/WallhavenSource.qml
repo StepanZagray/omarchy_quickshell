@@ -4,8 +4,16 @@ import Quickshell.Io
 
 // Live results from wallhaven.cc. Driven by `query` (empty -> SFW toplist
 // of the last month, otherwise -> relevance search). Picking an item
-// downloads the full image into aether's wallpaper directory and runs
-// `aether --generate` to build a theme.
+// uses the cached thumbnail (not the full wallpaper) as the input to
+// `aether --generate`, so the previewed colours match what's applied —
+// aether sees the same source bytes either way.
+//
+// Each result's thumbnail is cached at
+//   ~/.cache/quickshell-desktop/wallhaven/<id>.jpg
+// and aether's extracted palette at
+//   ~/.cache/quickshell-desktop/wallhaven/<id>.palette
+// (one #hex per line, 16 lines). Cell delegates FileView that .palette
+// file and render the swatches as soon as extraction completes.
 //
 // Parameters mirror the omarchy-theme-from-wallhaven defaults: purity=100
 // (SFW), categories=100 (General). Anonymous API access — no key needed.
@@ -13,6 +21,8 @@ Item {
     id: source
 
     required property var navbar  // for navbar.run(cmd) and HOME env
+
+    readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/quickshell-desktop/wallhaven"
 
     property var  items: []
     property int  page: 1
@@ -40,8 +50,29 @@ Item {
         probe.running = true;
     }
 
+    // Append the next page's results onto the existing items list. Used
+    // by the infinite-scroll handler in AetherPopup so the user doesn't
+    // have to step through pages manually.
+    function loadNextPage() {
+        if (source.loading) return;
+        source.appendMode = true;
+        source.loadPage(source.page + 1);
+    }
+    property bool appendMode: false
+
     function refresh() {
+        source.appendMode = false;
         source.loadPage(source.page);
+    }
+
+    function thumbPathFor(item) {
+        if (!item) return "";
+        return source.cacheDir + "/" + item.id + ".jpg";
+    }
+
+    function palettePathFor(item) {
+        if (!item) return "";
+        return source.cacheDir + "/" + item.id + ".palette";
     }
 
     function moveSelection(delta) {
@@ -54,19 +85,21 @@ Item {
         source.selectedIndex = next;
     }
 
-    // Download into aether's wallpaper dir (matches omarchy convention
-    // so the picked image also shows up in `aether --list-wallpapers`)
-    // and hand the local path to `aether --generate`. Caching means
-    // re-applying a previously-picked image skips the network.
+    // Apply the cached thumbnail (not the full wallpaper). The thumbnail
+    // is the same image bytes that drove the preview palette, so aether
+    // sees exactly what the user saw. Side benefit: no extra 1-4 MB
+    // download per apply. The cached thumb also gets copied into
+    // aether's wallpaper dir so it shows up in --list-wallpapers.
     function applyItem(item) {
-        if (!item || !item.path) return;
-        const url = item.path;
-        const fname = url.split("/").pop();
-        const dest = Quickshell.env("HOME") + "/.local/share/aether/wallpapers/" + fname;
+        if (!item || !item.id || !item.thumb) return;
+        const thumb = source.thumbPathFor(item);
+        const wallpaperDir = Quickshell.env("HOME") + "/.local/share/aether/wallpapers";
+        const dest = wallpaperDir + "/wallhaven-" + item.id + ".jpg";
         source.navbar.run(
-            "mkdir -p \"$(dirname " + JSON.stringify(dest) + ")\""
-            + " && { [ -f " + JSON.stringify(dest) + " ]"
-            + "       || curl -fsSL --max-time 60 -o " + JSON.stringify(dest) + " " + JSON.stringify(url) + "; }"
+            "mkdir -p " + JSON.stringify(wallpaperDir)
+            + " && { [ -f " + JSON.stringify(thumb) + " ]"
+            + "       || curl -fsSL --max-time 30 -o " + JSON.stringify(thumb) + " " + JSON.stringify(item.thumb) + "; }"
+            + " && cp -f " + JSON.stringify(thumb) + " " + JSON.stringify(dest)
             + " && aether --generate " + JSON.stringify(dest)
         );
     }
@@ -109,9 +142,56 @@ Item {
                         ratio: d.ratio || ""
                     })).filter(d => d.thumb && d.path);
                 } catch (_) { arr = []; }
-                source.items = arr;
-                source.selectedIndex = arr.length > 0 ? 0 : -1;
+
+                if (source.appendMode) {
+                    // Dedupe by id when appending — wallhaven's toplist
+                    // can return overlapping pages near the cutoff.
+                    const seen = {};
+                    for (const e of source.items) seen[e.id] = true;
+                    source.items = source.items.concat(arr.filter(e => !seen[e.id]));
+                } else {
+                    source.items = arr;
+                    source.selectedIndex = arr.length > 0 ? 0 : -1;
+                }
+                source.appendMode = false;
+                source.kickExtraction();
             }
         }
+    }
+
+    function kickExtraction() {
+        if (source.items.length === 0) return;
+        // Inline the id/url pairs as bash positional args. Sequential
+        // serial loop — cache hits skip both download and aether call,
+        // so re-opening a recently-browsed page is instant. One job at a
+        // time keeps CPU pressure reasonable while users scroll.
+        const argv = ["bash", "-c",
+            "CACHE=" + JSON.stringify(source.cacheDir) + ";"
+            + " mkdir -p \"$CACHE\";"
+            + " while [ $# -ge 2 ]; do"
+            + "   id=$1; url=$2; shift 2;"
+            + "   pal=\"$CACHE/$id.palette\";"
+            + "   [ -f \"$pal\" ] && continue;"
+            + "   thumb=\"$CACHE/$id.jpg\";"
+            + "   [ -f \"$thumb\" ] || curl -fsSL --max-time 20 -o \"$thumb\" \"$url\" || continue;"
+            + "   aether --extract-palette \"$thumb\" 2>/dev/null"
+            + "     | awk '{print $2}' > \"$pal.tmp\""
+            + "     && mv \"$pal.tmp\" \"$pal\";"
+            + " done",
+            "extract"];
+        for (const it of source.items) {
+            if (it.id && it.thumb) {
+                argv.push(it.id);
+                argv.push(it.thumb);
+            }
+        }
+        extractor.command = argv;
+        extractor.running = false;
+        extractor.running = true;
+    }
+
+    Process {
+        id: extractor
+        running: false
     }
 }

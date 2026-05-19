@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Io
 
 // Two-mode picker. BLUEPRINTS shows the user's saved aether blueprints
 // (apply via `aether --apply-blueprint`); WALLHAVEN streams SFW toplist
@@ -27,10 +28,11 @@ CardWindow {
     subtitle: {
         const r = aetherPopup.root;
         if (aetherPopup.wallhavenMode) {
-            if (wallhaven.loading) return "WALLHAVEN  ·  LOADING…";
+            if (wallhaven.loading && wallhaven.items.length === 0) return "WALLHAVEN  ·  LOADING…";
             const n = wallhaven.items.length;
             if (n === 0) return "WALLHAVEN  ·  NO RESULTS";
-            return "WALLHAVEN  ·  TOPLIST  ·  PAGE " + wallhaven.page;
+            const tag = wallhaven.query === "" ? "TOPLIST" : "“" + wallhaven.query + "”";
+            return "WALLHAVEN  ·  " + tag + "  ·  " + n + " LOADED" + (wallhaven.loading ? "  ·  +" : "");
         }
         if (r.aetherLoading) return "BLUEPRINTS  ·  LOADING…";
         const total = r.aetherBlueprints.length;
@@ -41,29 +43,17 @@ CardWindow {
             ? "BLUEPRINTS  ·  NO MATCHES"
             : "BLUEPRINTS  ·  " + shown + " / " + total + " MATCH" + (shown === 1 ? "" : "ES");
     }
-    footer: "TAB SWITCHES MODE  ·  ↵ APPLY  ·  ESC CLOSE"
+    footer: aetherPopup.wallhavenMode
+            ? "SCROLL FOR MORE  ·  ↵ APPLY  ·  TAB MODE  ·  ESC"
+            : "TAB SWITCHES MODE  ·  ↵ APPLY  ·  ESC CLOSE"
 
-    headerRight: Row {
-        spacing: 12
+    headerRight: CalendarChevron {
         visible: aetherPopup.wallhavenMode
-        CalendarChevron {
-            root: aetherPopup.root
-            text: "‹"
-            opacity: wallhaven.page > 1 ? 1.0 : 0.3
-            onTriggered: if (wallhaven.page > 1) wallhaven.loadPage(wallhaven.page - 1)
-        }
-        CalendarChevron {
-            root: aetherPopup.root
-            text: aetherPopup.root.icoRefresh
-            restColor: aetherPopup.root.inkDeep
-            font.pixelSize: 22
-            onTriggered: wallhaven.refresh()
-        }
-        CalendarChevron {
-            root: aetherPopup.root
-            text: "›"
-            onTriggered: wallhaven.loadPage(wallhaven.page + 1)
-        }
+        root: aetherPopup.root
+        text: aetherPopup.root.icoRefresh
+        restColor: aetherPopup.root.inkDeep
+        font.pixelSize: 22
+        onTriggered: wallhaven.refresh()
     }
 
     onDismiss: aetherPopup.root.aetherVisible = false
@@ -92,10 +82,12 @@ CardWindow {
                 wallhaven.moveSelection(4); followSel();
             } else if (k === Qt.Key_Up || k === Qt.Key_K) {
                 wallhaven.moveSelection(-4); followSel();
-            } else if (k === Qt.Key_N) {
-                wallhaven.loadPage(wallhaven.page + 1);
-            } else if (k === Qt.Key_P) {
-                if (wallhaven.page > 1) wallhaven.loadPage(wallhaven.page - 1);
+            } else if (k === Qt.Key_Home) {
+                wallhavenGrid.positionViewAtBeginning();
+                if (wallhaven.items.length > 0) wallhaven.selectedIndex = 0;
+            } else if (k === Qt.Key_End) {
+                wallhavenGrid.positionViewAtEnd();
+                if (wallhaven.items.length > 0) wallhaven.selectedIndex = wallhaven.items.length - 1;
             } else if (k === Qt.Key_Return || k === Qt.Key_Enter) {
                 const it = wallhaven.items[wallhaven.selectedIndex];
                 if (it) {
@@ -341,6 +333,11 @@ CardWindow {
         }
 
         // ---------- Wallhaven grid (scrollable) ----------
+        // Auto-fetches the next page when the user scrolls near the
+        // bottom. Wallhaven's swatches aren't shown because aether does
+        // its own palette extraction in --generate; rendering
+        // wallhaven's 5 colors here would advertise a theme that
+        // doesn't match the result.
         GridView {
             id: wallhavenGrid
             width: parent.width
@@ -348,25 +345,57 @@ CardWindow {
             visible: aetherPopup.wallhavenMode
             clip: true
             cellWidth: width / 4
-            cellHeight: cellWidth * 9 / 16 + 16
+            cellHeight: cellWidth * 9 / 16 + 4
             model: wallhaven.items
             currentIndex: wallhaven.selectedIndex
             boundsBehavior: Flickable.StopAtBounds
             cacheBuffer: cellHeight * 2
+
+            // Append-on-scroll-end. atYEnd flips when the bottom is at
+            // the viewport edge. !loading guards against firing again
+            // while a page is in flight; the &&-with-items count guards
+            // the cold-open case (atYEnd is true on an empty list).
+            onAtYEndChanged: {
+                if (atYEnd && !wallhaven.loading && wallhaven.items.length > 0) {
+                    wallhaven.loadNextPage();
+                }
+            }
 
             delegate: Item {
                 id: whCell
                 required property var modelData
                 required property int index
                 readonly property bool isSelected: wallhaven.selectedIndex === whCell.index
+                property var extractedPalette: []
 
                 width: wallhavenGrid.cellWidth
                 height: wallhavenGrid.cellHeight
 
+                // The .palette file appears once the WallhavenSource
+                // batch extractor reaches this item. watchChanges picks
+                // up the mv from .tmp; onLoaded parses the 16 hex lines.
+                FileView {
+                    path: wallhaven.palettePathFor(whCell.modelData)
+                    watchChanges: true
+                    onFileChanged: reload()
+                    onLoaded: {
+                        const lines = text().split("\n");
+                        const out = [];
+                        for (let i = 0; i < lines.length; i++) {
+                            const s = lines[i].trim();
+                            if (s.length > 0 && s.charAt(0) === "#") out.push(s);
+                        }
+                        whCell.extractedPalette = out;
+                    }
+                }
+
                 Rectangle {
-                    anchors.fill: parent
+                    id: whImageBox
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
                     anchors.margins: 3
-                    anchors.bottomMargin: 11
+                    height: parent.height - 12
                     color: Qt.rgba(aetherPopup.root.ink.r, aetherPopup.root.ink.g, aetherPopup.root.ink.b, 0.04)
                     border.color: whCell.isSelected ? aetherPopup.root.seal : aetherPopup.root.sep
                     border.width: 1
@@ -387,21 +416,22 @@ CardWindow {
                     }
                 }
 
-                // Wallhaven ships a pre-computed palette per image; render
-                // as a tiny strip so users feel how the theme will land
-                // before applying.
+                // Aether-extracted palette strip. Renders progressively
+                // as the .palette cache file lands. Eight slots (out of
+                // sixteen) chosen as the visually-distinctive subset.
                 Row {
-                    anchors.bottom: parent.bottom
+                    anchors.top: whImageBox.bottom
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 3
                     anchors.rightMargin: 3
+                    anchors.topMargin: 1
                     spacing: 0
                     Repeater {
-                        model: (whCell.modelData.colors || []).slice(0, 5)
+                        model: whCell.extractedPalette.slice(0, 8)
                         delegate: Rectangle {
                             required property var modelData
-                            width: (whCell.width - 6) / 5
+                            width: (whCell.width - 6) / 8
                             height: 8
                             color: modelData
                         }
