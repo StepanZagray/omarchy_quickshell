@@ -94,6 +94,20 @@ Item {
         if (!text || root.tooltipText === text) root.tooltipShown = false;
     }
 
+    // ---------- Popup anchor ----------
+    // Bar triggers stash their bar-window-local centre here right before
+    // calling open*(); anchored popups read it so they hug the trigger
+    // rather than centring on screen. Coordinates are bar-window-local —
+    // identical to the tooltip overlay's coordinate space because both
+    // the bar and the popup overlays are full-edge PanelWindows.
+    property real popupAnchorX: 0
+    property real popupAnchorY: 0
+
+    function setPopupAnchor(x, y) {
+        root.popupAnchorX = x;
+        root.popupAnchorY = y;
+    }
+
     // ---------- State ----------
     property int activeWs: 1
     property var existingWs: [1, 2, 3, 4, 5]

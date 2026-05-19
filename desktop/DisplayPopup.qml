@@ -10,6 +10,11 @@ CardWindow {
     layerNamespace: "omarchy-display"
     footer: "↑↓ ROW · ←→ ADJUST · 1-4 PRESET · R RESET · B BLANK · E EDIT · ESC"
 
+    anchorEdge:    displayPopup.root.barEdge
+    anchorBarSize: displayPopup.root.barHeight
+    anchorBarX:    displayPopup.root.popupAnchorX
+    anchorBarY:    displayPopup.root.popupAnchorY
+
     title: "DISPLAY"
     subtitle: Math.round(displayPopup.root.warmthK) + "K  ·  BR " + displayPopup.root.brightnessPct
               + "  ·  γ " + Math.round(displayPopup.root.gammaPct)
