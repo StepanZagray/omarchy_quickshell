@@ -41,7 +41,7 @@ CardWindow {
             : "BLUEPRINTS  ·  " + shown + " / " + total + " MATCH" + (shown === 1 ? "" : "ES");
     }
     footer: aetherPopup.wallhavenMode
-            ? "SCROLL FOR MORE  ·  ↵ APPLY  ·  TAB MODE  ·  ESC"
+            ? "SCROLL FOR MORE  ·  ↵ APPLY  ·  ^M MATERIAL  ·  TAB MODE  ·  ESC"
             : "TAB SWITCHES MODE  ·  ↵ APPLY  ·  ESC CLOSE"
 
     headerRight: CalendarChevron {
@@ -70,6 +70,13 @@ CardWindow {
 
         if (aetherPopup.wallhavenMode) {
             const followSel = () => wallhavenGrid.positionViewAtIndex(wallhaven.selectedIndex, GridView.Contain);
+            // Toggle the material extraction mode. Ctrl is required so
+            // plain "m" still types into the search query.
+            if (k === Qt.Key_M && (mods & Qt.ControlModifier)) {
+                wallhaven.material = !wallhaven.material;
+                event.accepted = true;
+                return;
+            }
             if (k === Qt.Key_Right) {
                 wallhaven.moveSelection(1); followSel();
             } else if (k === Qt.Key_Left) {
@@ -160,20 +167,36 @@ CardWindow {
         width: parent.width
         spacing: 12
 
-        // Mode switch chips
-        Row {
-            spacing: 8
-            DisplayChip {
-                root: aetherPopup.root
-                label: "BLUEPRINTS"
-                selected: !aetherPopup.wallhavenMode
-                onActivated: aetherPopup.mode = "blueprints"
+        // Mode switch chips. Material toggle hangs off the right edge,
+        // only meaningful in wallhaven mode so we hide it elsewhere.
+        Item {
+            width: parent.width
+            height: 22
+            Row {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 8
+                DisplayChip {
+                    root: aetherPopup.root
+                    label: "BLUEPRINTS"
+                    selected: !aetherPopup.wallhavenMode
+                    onActivated: aetherPopup.mode = "blueprints"
+                }
+                DisplayChip {
+                    root: aetherPopup.root
+                    label: "WALLHAVEN"
+                    selected: aetherPopup.wallhavenMode
+                    onActivated: aetherPopup.mode = "wallhaven"
+                }
             }
             DisplayChip {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
                 root: aetherPopup.root
-                label: "WALLHAVEN"
-                selected: aetherPopup.wallhavenMode
-                onActivated: aetherPopup.mode = "wallhaven"
+                label: "MATERIAL"
+                visible: aetherPopup.wallhavenMode
+                selected: wallhaven.material
+                onActivated: wallhaven.material = !wallhaven.material
             }
         }
 
@@ -389,6 +412,14 @@ CardWindow {
                         }
                         whCell.extractedPalette = out;
                     }
+                }
+
+                // Switching modes points the FileView at a different
+                // cache file; clear the cached palette so watchChanges
+                // re-arms and swatches refresh once the new file lands.
+                Connections {
+                    target: wallhaven
+                    function onMaterialChanged() { whCell.extractedPalette = []; }
                 }
 
                 Rectangle {

@@ -3,13 +3,22 @@ import Quickshell
 import Quickshell.Io
 
 // Wallhaven.cc backend for the aether popup. Anonymous API, SFW only
-// (purity=100, categories=100). Picking an item applies the cached
-// thumbnail (not the full wallpaper) so aether's `--generate` sees the
-// same bytes that drove the preview palette — preview matches result.
+// (purity=100, categories=100). Previews are driven by the cached
+// thumbnail; applying fetches the full-resolution image (item.path)
+// and hands that to aether --generate, so the desktop background is
+// sharp even on hi-dpi panels. The preview palette and final theme
+// may drift very slightly because they come from different scales of
+// the same image, but the dominant colors are stable enough that the
+// preview remains a faithful guide.
 //
 // Cache layout under cacheDir:
-//   <id>.jpg      — thumbnail
-//   <id>.palette  — 16 lines of #hex extracted by `aether --extract-palette`
+//   <id>.jpg              — thumbnail (preview only)
+//   <id>.palette          — 16 lines of #hex (default "normal" mode)
+//   <id>.material.palette — 16 lines of #hex (--extract-mode material)
+// Palette caches are mode-keyed so toggling between normal and material
+// doesn't blow away the other set — flipping back is instant. Full-res
+// images land in ~/.local/share/aether/wallpapers/ and are reused on
+// re-apply rather than re-fetched.
 Item {
     id: source
 
@@ -23,6 +32,10 @@ Item {
     property bool loading: false
     property string query: ""
     property bool active: false
+    // When true, both extraction (preview swatches) and apply route
+    // through `aether --extract-mode material`. Preview-matches-result
+    // depends on both calls staying in lockstep.
+    property bool material: false
 
     // Index up to which kickExtraction has already enqueued items. Lets
     // each appended page only enqueue its new tail rather than re-walking
@@ -60,8 +73,19 @@ Item {
         source.loadPage(source.page, false);
     }
 
-    function thumbPathFor(item)   { return item ? source.cacheDir + "/" + item.id + ".jpg"     : ""; }
-    function palettePathFor(item) { return item ? source.cacheDir + "/" + item.id + ".palette" : ""; }
+    function thumbPathFor(item)   { return item ? source.cacheDir + "/" + item.id + ".jpg" : ""; }
+    function palettePathFor(item) {
+        if (!item) return "";
+        const suffix = source.material ? ".material.palette" : ".palette";
+        return source.cacheDir + "/" + item.id + suffix;
+    }
+
+    // Re-extract for the new mode. Existing caches for the other mode
+    // are left in place so flipping back doesn't repeat the work.
+    onMaterialChanged: {
+        source.extractedCount = 0;
+        source.kickExtraction();
+    }
 
     function moveSelection(delta) {
         const n = source.items.length;
@@ -71,16 +95,19 @@ Item {
     }
 
     function applyItem(item) {
-        if (!item || !item.id || !item.thumb) return;
-        const thumb = source.thumbPathFor(item);
+        if (!item || !item.id || !item.path) return;
         const wallpaperDir = Quickshell.env("HOME") + "/.local/share/aether/wallpapers";
-        const dest = wallpaperDir + "/wallhaven-" + item.id + ".jpg";
+        // wallhaven's full-image URL ends in .jpg or .png; preserve the
+        // original extension so swww/hyprpaper/etc. don't misidentify.
+        const url = item.path;
+        const ext = url.toLowerCase().endsWith(".png") ? ".png" : ".jpg";
+        const dest = wallpaperDir + "/wallhaven-" + item.id + ext;
+        const modeArg = source.material ? " --extract-mode material" : "";
         source.navbar.run(
             "mkdir -p " + JSON.stringify(wallpaperDir)
-            + " && { [ -f " + JSON.stringify(thumb) + " ]"
-            + "       || curl -fsSL --max-time 30 -o " + JSON.stringify(thumb) + " " + JSON.stringify(item.thumb) + "; }"
-            + " && cp -f " + JSON.stringify(thumb) + " " + JSON.stringify(dest)
-            + " && aether --generate " + JSON.stringify(dest)
+            + " && { [ -f " + JSON.stringify(dest) + " ]"
+            + "       || curl -fsSL --max-time 60 -o " + JSON.stringify(dest) + " " + JSON.stringify(url) + "; }"
+            + " && aether --generate " + JSON.stringify(dest) + modeArg
         );
     }
 
@@ -136,21 +163,27 @@ Item {
 
     // Spawn aether --extract-palette for items added since the last
     // call. Cache hits short-circuit before any network or aether call,
-    // so re-visiting a page is instant.
+    // so re-visiting a page is instant. SUFFIX/MODE_ARG come in via the
+    // environment so the script body stays mode-agnostic.
     function kickExtraction() {
         const items = source.items;
         if (items.length <= source.extractedCount) return;
 
+        const suffix  = source.material ? ".material.palette" : ".palette";
+        const modeArg = source.material ? "--extract-mode material" : "";
+
         const argv = ["bash", "-c",
             "CACHE=" + JSON.stringify(source.cacheDir) + ";"
+            + " SUFFIX=" + JSON.stringify(suffix) + ";"
+            + " MODE_ARG=" + JSON.stringify(modeArg) + ";"
             + " mkdir -p \"$CACHE\";"
             + " while [ $# -ge 2 ]; do"
             + "   id=$1; url=$2; shift 2;"
-            + "   pal=\"$CACHE/$id.palette\";"
+            + "   pal=\"$CACHE/$id$SUFFIX\";"
             + "   [ -f \"$pal\" ] && continue;"
             + "   thumb=\"$CACHE/$id.jpg\";"
             + "   [ -f \"$thumb\" ] || curl -fsSL --max-time 20 -o \"$thumb\" \"$url\" || continue;"
-            + "   aether --extract-palette \"$thumb\" 2>/dev/null"
+            + "   aether --extract-palette \"$thumb\" $MODE_ARG 2>/dev/null"
             + "     | awk '{print $2}' > \"$pal.tmp\""
             + "     && mv \"$pal.tmp\" \"$pal\";"
             + " done",
