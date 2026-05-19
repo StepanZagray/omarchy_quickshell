@@ -2,25 +2,18 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Live results from wallhaven.cc. Driven by `query` (empty -> SFW toplist
-// of the last month, otherwise -> relevance search). Picking an item
-// uses the cached thumbnail (not the full wallpaper) as the input to
-// `aether --generate`, so the previewed colours match what's applied —
-// aether sees the same source bytes either way.
+// Wallhaven.cc backend for the aether popup. Anonymous API, SFW only
+// (purity=100, categories=100). Picking an item applies the cached
+// thumbnail (not the full wallpaper) so aether's `--generate` sees the
+// same bytes that drove the preview palette — preview matches result.
 //
-// Each result's thumbnail is cached at
-//   ~/.cache/quickshell-desktop/wallhaven/<id>.jpg
-// and aether's extracted palette at
-//   ~/.cache/quickshell-desktop/wallhaven/<id>.palette
-// (one #hex per line, 16 lines). Cell delegates FileView that .palette
-// file and render the swatches as soon as extraction completes.
-//
-// Parameters mirror the omarchy-theme-from-wallhaven defaults: purity=100
-// (SFW), categories=100 (General). Anonymous API access — no key needed.
+// Cache layout under cacheDir:
+//   <id>.jpg      — thumbnail
+//   <id>.palette  — 16 lines of #hex extracted by `aether --extract-palette`
 Item {
     id: source
 
-    required property var navbar  // for navbar.run(cmd) and HOME env
+    required property var navbar
 
     readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/quickshell-desktop/wallhaven"
 
@@ -29,10 +22,16 @@ Item {
     property int  selectedIndex: -1
     property bool loading: false
     property string query: ""
-
-    // Toggled by AetherPopup so this source only fetches while in
-    // wallhaven mode. First flip from false→true kicks the cold-open.
     property bool active: false
+
+    // Index up to which kickExtraction has already enqueued items. Lets
+    // each appended page only enqueue its new tail rather than re-walking
+    // the full accumulated list.
+    property int extractedCount: 0
+
+    // Captures the "append" intent for the in-flight probe so a refresh
+    // racing a loadNextPage can't get its mode flipped under it.
+    property bool _appendNext: false
 
     readonly property string url: {
         const q = source.query.trim();
@@ -43,53 +42,34 @@ Item {
         return q === "" ? base : base + "&q=" + encodeURIComponent(q);
     }
 
-    function loadPage(n) {
+    function loadPage(n, append) {
         source.page = Math.max(1, n);
+        source._appendNext = !!append;
         source.loading = true;
         probe.running = false;
         probe.running = true;
     }
 
-    // Append the next page's results onto the existing items list. Used
-    // by the infinite-scroll handler in AetherPopup so the user doesn't
-    // have to step through pages manually.
     function loadNextPage() {
         if (source.loading) return;
-        source.appendMode = true;
-        source.loadPage(source.page + 1);
+        source.loadPage(source.page + 1, true);
     }
-    property bool appendMode: false
 
     function refresh() {
-        source.appendMode = false;
-        source.loadPage(source.page);
+        source.extractedCount = 0;
+        source.loadPage(source.page, false);
     }
 
-    function thumbPathFor(item) {
-        if (!item) return "";
-        return source.cacheDir + "/" + item.id + ".jpg";
-    }
-
-    function palettePathFor(item) {
-        if (!item) return "";
-        return source.cacheDir + "/" + item.id + ".palette";
-    }
+    function thumbPathFor(item)   { return item ? source.cacheDir + "/" + item.id + ".jpg"     : ""; }
+    function palettePathFor(item) { return item ? source.cacheDir + "/" + item.id + ".palette" : ""; }
 
     function moveSelection(delta) {
         const n = source.items.length;
         if (n === 0) { source.selectedIndex = -1; return; }
         const cur = source.selectedIndex < 0 ? 0 : source.selectedIndex;
-        let next = cur + delta;
-        if (next < 0) next = 0;
-        else if (next >= n) next = n - 1;
-        source.selectedIndex = next;
+        source.selectedIndex = Math.max(0, Math.min(n - 1, cur + delta));
     }
 
-    // Apply the cached thumbnail (not the full wallpaper). The thumbnail
-    // is the same image bytes that drove the preview palette, so aether
-    // sees exactly what the user saw. Side benefit: no extra 1-4 MB
-    // download per apply. The cached thumb also gets copied into
-    // aether's wallpaper dir so it shows up in --list-wallpapers.
     function applyItem(item) {
         if (!item || !item.id || !item.thumb) return;
         const thumb = source.thumbPathFor(item);
@@ -104,24 +84,18 @@ Item {
         );
     }
 
-    // 300ms debounce so each keystroke doesn't fire a wallhaven request.
     Timer {
         id: queryDebounce
         interval: 300
         repeat: false
         onTriggered: {
-            source.page = 1;
-            source.loadPage(1);
+            source.extractedCount = 0;
+            source.loadPage(1, false);
         }
     }
 
-    onQueryChanged: {
-        if (source.active) queryDebounce.restart();
-    }
-
-    onActiveChanged: {
-        if (active && items.length === 0 && !loading) source.loadPage(1);
-    }
+    onQueryChanged: if (source.active) queryDebounce.restart()
+    onActiveChanged: if (active && items.length === 0 && !loading) source.loadPage(1, false)
 
     Process {
         id: probe
@@ -143,28 +117,30 @@ Item {
                     })).filter(d => d.thumb && d.path);
                 } catch (_) { arr = []; }
 
-                if (source.appendMode) {
-                    // Dedupe by id when appending — wallhaven's toplist
-                    // can return overlapping pages near the cutoff.
+                if (source._appendNext) {
+                    // Dedupe by id — wallhaven's toplist can return
+                    // overlapping pages near the cutoff.
                     const seen = {};
                     for (const e of source.items) seen[e.id] = true;
                     source.items = source.items.concat(arr.filter(e => !seen[e.id]));
                 } else {
                     source.items = arr;
                     source.selectedIndex = arr.length > 0 ? 0 : -1;
+                    source.extractedCount = 0;
                 }
-                source.appendMode = false;
+                source._appendNext = false;
                 source.kickExtraction();
             }
         }
     }
 
+    // Spawn aether --extract-palette for items added since the last
+    // call. Cache hits short-circuit before any network or aether call,
+    // so re-visiting a page is instant.
     function kickExtraction() {
-        if (source.items.length === 0) return;
-        // Inline the id/url pairs as bash positional args. Sequential
-        // serial loop — cache hits skip both download and aether call,
-        // so re-opening a recently-browsed page is instant. One job at a
-        // time keeps CPU pressure reasonable while users scroll.
+        const items = source.items;
+        if (items.length <= source.extractedCount) return;
+
         const argv = ["bash", "-c",
             "CACHE=" + JSON.stringify(source.cacheDir) + ";"
             + " mkdir -p \"$CACHE\";"
@@ -179,12 +155,16 @@ Item {
             + "     && mv \"$pal.tmp\" \"$pal\";"
             + " done",
             "extract"];
-        for (const it of source.items) {
-            if (it.id && it.thumb) {
+        for (let i = source.extractedCount; i < items.length; i++) {
+            const it = items[i];
+            if (it && it.id && it.thumb) {
                 argv.push(it.id);
                 argv.push(it.thumb);
             }
         }
+        source.extractedCount = items.length;
+        if (argv.length <= 4) return;
+
         extractor.command = argv;
         extractor.running = false;
         extractor.running = true;

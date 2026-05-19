@@ -1,15 +1,12 @@
 import QtQuick
 import Quickshell.Io
 
-// Two-mode picker. BLUEPRINTS shows the user's saved aether blueprints
-// (apply via `aether --apply-blueprint`); WALLHAVEN streams SFW toplist
-// wallpapers from wallhaven.cc, downloads the picked one, and hands it
-// to `aether --generate` for full palette extraction + apply.
+// Two-mode picker — local aether blueprints, or wallhaven.cc browse
+// with thumbnail-driven palette extraction.
 CardWindow {
     id: aetherPopup
     required property var root
 
-    // "blueprints" | "wallhaven"
     property string mode: "blueprints"
     readonly property bool wallhavenMode: mode === "wallhaven"
 
@@ -63,8 +60,8 @@ CardWindow {
         const k = event.key;
         const mods = event.modifiers;
 
-        // Tab switches modes. Shift+Tab in blueprint list nav stays as
-        // a backward step — only plain Tab toggles modes.
+        // Plain Tab toggles modes; Shift+Tab is reserved for backward
+        // list nav in blueprint mode.
         if (k === Qt.Key_Tab && !(mods & Qt.ShiftModifier) && !aetherPopup.wallhavenMode && r.aetherQuery.length === 0) {
             aetherPopup.mode = "wallhaven";
             event.accepted = true;
@@ -72,7 +69,6 @@ CardWindow {
         }
 
         if (aetherPopup.wallhavenMode) {
-            // 4-col grid: ←/→ step by 1, ↑/↓ step by 4 (cols).
             const followSel = () => wallhavenGrid.positionViewAtIndex(wallhaven.selectedIndex, GridView.Contain);
             if (k === Qt.Key_Right) {
                 wallhaven.moveSelection(1); followSel();
@@ -114,7 +110,6 @@ CardWindow {
             return;
         }
 
-        // Blueprints mode (existing behaviour).
         if (k === Qt.Key_Down
             || (k === Qt.Key_Tab && !(mods & Qt.ShiftModifier))) {
             r.moveAetherSelection(1, true);
@@ -333,11 +328,6 @@ CardWindow {
         }
 
         // ---------- Wallhaven grid (scrollable) ----------
-        // Auto-fetches the next page when the user scrolls near the
-        // bottom. Wallhaven's swatches aren't shown because aether does
-        // its own palette extraction in --generate; rendering
-        // wallhaven's 5 colors here would advertise a theme that
-        // doesn't match the result.
         GridView {
             id: wallhavenGrid
             width: parent.width
@@ -351,9 +341,7 @@ CardWindow {
             boundsBehavior: Flickable.StopAtBounds
             cacheBuffer: cellHeight * 2
 
-            // Mouse wheel: Qt's Flickable default is one notch per ~3 cells,
-            // which feels glacial on a tall scroll target. Override with a
-            // WheelHandler that jumps a full row per tick.
+            // Flickable's built-in wheel maps too small for a grid.
             WheelHandler {
                 target: null
                 onWheel: function(event) {
@@ -366,10 +354,8 @@ CardWindow {
                 }
             }
 
-            // Append-on-scroll-end. atYEnd flips when the bottom is at
-            // the viewport edge. !loading guards against firing again
-            // while a page is in flight; the &&-with-items count guards
-            // the cold-open case (atYEnd is true on an empty list).
+            // !loading guards an in-flight page; items.length > 0 keeps
+            // the cold-open from firing (atYEnd is true on an empty list).
             onAtYEndChanged: {
                 if (atYEnd && !wallhaven.loading && wallhaven.items.length > 0) {
                     wallhaven.loadNextPage();
@@ -386,12 +372,13 @@ CardWindow {
                 width: wallhavenGrid.cellWidth
                 height: wallhavenGrid.cellHeight
 
-                // The .palette file appears once the WallhavenSource
-                // batch extractor reaches this item. watchChanges picks
-                // up the mv from .tmp; onLoaded parses the 16 hex lines.
+                // watchChanges only while rendering and not yet loaded
+                // — keeps inotify slots from leaking across scrolls.
                 FileView {
                     path: wallhaven.palettePathFor(whCell.modelData)
-                    watchChanges: true
+                    watchChanges: aetherPopup.wallhavenMode
+                                  && aetherPopup.revealed
+                                  && whCell.extractedPalette.length === 0
                     onFileChanged: reload()
                     onLoaded: {
                         const lines = text().split("\n");
@@ -431,9 +418,6 @@ CardWindow {
                     }
                 }
 
-                // Aether-extracted palette strip. Renders progressively
-                // as the .palette cache file lands. Eight slots (out of
-                // sixteen) chosen as the visually-distinctive subset.
                 Row {
                     anchors.top: whImageBox.bottom
                     anchors.left: parent.left
@@ -467,8 +451,6 @@ CardWindow {
             }
         }
 
-        // Empty-state placeholder for wallhaven mode while the first
-        // page hasn't loaded.
         Text {
             width: parent.width
             visible: aetherPopup.wallhavenMode && wallhaven.items.length === 0
