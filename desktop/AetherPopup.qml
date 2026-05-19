@@ -351,6 +351,21 @@ CardWindow {
             boundsBehavior: Flickable.StopAtBounds
             cacheBuffer: cellHeight * 2
 
+            // Mouse wheel: Qt's Flickable default is one notch per ~3 cells,
+            // which feels glacial on a tall scroll target. Override with a
+            // WheelHandler that jumps a full row per tick.
+            WheelHandler {
+                target: null
+                onWheel: function(event) {
+                    const grid = wallhavenGrid;
+                    const step = grid.cellHeight * 1.5;
+                    const dy = event.angleDelta.y > 0 ? -step : step;
+                    const max = Math.max(0, grid.contentHeight - grid.height);
+                    grid.contentY = Math.max(0, Math.min(max, grid.contentY + dy));
+                    event.accepted = true;
+                }
+            }
+
             // Append-on-scroll-end. atYEnd flips when the bottom is at
             // the viewport edge. !loading guards against firing again
             // while a page is in flight; the &&-with-items count guards
