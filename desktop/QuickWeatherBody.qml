@@ -7,6 +7,7 @@ Item {
     id: body
     required property var root
     required property var nav
+    width: parent ? parent.width : 0
 
     signal close()
 

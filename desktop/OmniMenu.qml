@@ -616,7 +616,14 @@ Item {
             // themes) so a ~520px preview pane fits next to the result
             // list; narrow back to 640 elsewhere so apps and omarchy
             // mode keep their compact feel.
-            width: root.previewActive ? 1000 : 640
+            // Quick mode shares OmniMenu's default 640 width when no tile
+            // is expanded, and widens to fit the side-by-side detail
+            // panel when one is.
+            width: root.previewActive
+                   ? 1000
+                   : root.quickMode && root.expandedTile !== null
+                       ? 1040
+                       : 640
             Behavior on width {
                 NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
             }
@@ -879,16 +886,25 @@ Item {
 
                 Rectangle { width: parent.width; height: 1; color: root.sep }
 
-                // ---------- Quick tiles (quickMode only) ----------
-                // Lives above the search field so the filter caption reads
-                // as "narrow this grid." Hidden in every other mode so the
-                // standard ListView keeps the prime real estate. Tile
-                // visuals are inline — kept simple so the file doesn't
-                // sprout a sibling QuickTile.qml again.
+                // ---------- Quick container (quickMode only) ----------
+                // Lays the tile grid on the left and the optional detail
+                // panel on the right when a tile is expanded, so the panel
+                // doesn't push the grid down or shove rows off the card.
+                Item {
+                    id: quickContainer
+                    visible: root.quickMode
+                    width: parent.width
+                    height: visible
+                        ? Math.max(quickGrid.height,
+                                   detailPanel.visible ? detailPanel.height : 0)
+                        : 0
+
                 Item {
                     id: quickGrid
                     visible: root.quickMode
-                    width: parent.width
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    width: root.expandedTile !== null ? 380 : parent.width
                     // Auto-size to content: 4-col grid of fixed-height tiles.
                     readonly property int tileH: 86
                     readonly property int spacing: 10
@@ -993,12 +1009,16 @@ Item {
                     }
                 }
 
-                // Slim separator above the expanded detail panel — only
-                // visible when there's a panel to introduce.
+                // Vertical separator between the tile grid and the
+                // expanded detail panel.
                 Rectangle {
+                    id: quickMidSep
                     visible: root.quickMode && root.expandedTile !== null
-                    width: parent.width
-                    height: 1
+                    anchors.left: quickGrid.right
+                    anchors.leftMargin: 16
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: 1
                     color: root.sep
                 }
 
@@ -1011,9 +1031,19 @@ Item {
                 // footprint.
                 Item {
                     id: detailPanel
-                    width: parent.width
                     visible: root.quickMode && root.expandedTile !== null
-                    height: visible ? detailCol.implicitHeight + 12 : 0
+                    anchors.left: quickMidSep.right
+                    anchors.leftMargin: 16
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    // Cap the panel so the card never extends past its
+                    // budget. Body content beyond this height scrolls
+                    // inside `bodyScroll` below instead of pushing the
+                    // card off-screen.
+                    readonly property real _maxHeight: panel.height * 0.55
+                    readonly property real _wantHeight: detailHeader.implicitHeight + bodyLoader.implicitContentHeight + 18
+                    height: visible ? Math.min(_wantHeight, _maxHeight) : 0
+                    clip: true
                     Behavior on height {
                         NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
                     }
@@ -1047,81 +1077,93 @@ Item {
                     Component { id: videosBodyComp;      QuickVideosBody      { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
                     Component { id: powerBodyComp;       QuickPowerBody       { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
 
-                    Column {
-                        id: detailCol
+                    // Header (always visible at the top of the panel)
+                    RowLayout {
+                        id: detailHeader
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.topMargin: 6
-                        spacing: 10
-
-                        // Header: big glyph + label + live state line + close.
-                        RowLayout {
-                            width: parent.width
-                            spacing: 12
+                        spacing: 12
+                        Text {
+                            text: detailPanel.t ? detailPanel.t.glyph : ""
+                            color: detailPanel.t ? detailPanel.t.tone : root.ink
+                            font.family: root.mono
+                            font.pixelSize: 26
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        Column {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                            spacing: 2
                             Text {
-                                text: detailPanel.t ? detailPanel.t.glyph : ""
-                                color: detailPanel.t ? detailPanel.t.tone : root.ink
+                                text: detailPanel.t ? detailPanel.t.label : ""
+                                color: root.ink
                                 font.family: root.mono
-                                font.pixelSize: 26
-                                Layout.alignment: Qt.AlignVCenter
+                                font.pixelSize: 13
+                                font.letterSpacing: 2
+                                font.weight: Font.Medium
                             }
-                            Column {
-                                Layout.fillWidth: true
-                                Layout.alignment: Qt.AlignVCenter
-                                spacing: 2
-                                Text {
-                                    text: detailPanel.t ? detailPanel.t.label : ""
-                                    color: root.ink
-                                    font.family: root.mono
-                                    font.pixelSize: 13
-                                    font.letterSpacing: 2
-                                    font.weight: Font.Medium
-                                }
-                                Text {
-                                    text: detailPanel.t ? detailPanel.t.sub : ""
-                                    color: root.inkDeep
-                                    font.family: root.mono
-                                    font.pixelSize: 10
-                                    font.letterSpacing: 1
-                                    opacity: 0.85
-                                }
-                            }
-                            Rectangle {
-                                Layout.alignment: Qt.AlignVCenter
-                                width: 22; height: 22; radius: 11
-                                color: closeMouse.containsMouse
-                                       ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.08)
-                                       : "transparent"
-                                border.color: root.sep
-                                border.width: 1
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "×"
-                                    color: root.inkDeep
-                                    font.family: root.mono
-                                    font.pixelSize: 14
-                                }
-                                MouseArea {
-                                    id: closeMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.collapseTile()
-                                }
+                            Text {
+                                text: detailPanel.t ? detailPanel.t.sub : ""
+                                color: root.inkDeep
+                                font.family: root.mono
+                                font.pixelSize: 10
+                                font.letterSpacing: 1
+                                opacity: 0.85
                             }
                         }
+                        Rectangle {
+                            Layout.alignment: Qt.AlignVCenter
+                            width: 22; height: 22; radius: 11
+                            color: closeMouse.containsMouse
+                                   ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.08)
+                                   : "transparent"
+                            border.color: root.sep
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: "×"
+                                color: root.inkDeep
+                                font.family: root.mono
+                                font.pixelSize: 14
+                            }
+                            MouseArea {
+                                id: closeMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.collapseTile()
+                            }
+                        }
+                    }
 
-                        // ---- Per-tile body ----
-                        // The Loader instantiates the right Quick*Body
-                        // file for the expanded tile. Bodies own their
-                        // own probes, controls, and lists; they're fully
-                        // self-contained (no shell-out to omarchy
-                        // launchers — except CPU's btop, which is a TUI).
+                    // Scrollable body region: takes whatever vertical
+                    // space is left after the header. When the body
+                    // content exceeds the available space the user can
+                    // flick / scroll inside this clipped region instead
+                    // of having content fall off the card.
+                    Flickable {
+                        id: bodyScroll
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: detailHeader.bottom
+                        anchors.bottom: parent.bottom
+                        anchors.topMargin: 10
+                        contentWidth: width
+                        contentHeight: bodyLoader.implicitContentHeight
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        interactive: contentHeight > height
+
                         Loader {
                             id: bodyLoader
-                            width: parent.width
+                            width: bodyScroll.width
                             active: detailPanel.visible
+                            // Exposed so detailPanel.height can clamp to
+                            // panel-budget while still picking the
+                            // shorter of "content" / "available".
+                            readonly property real implicitContentHeight: item ? item.implicitHeight : 0
                             sourceComponent: {
                                 switch (detailPanel.tKey) {
                                     case "battery":     return batteryBodyComp;
@@ -1142,10 +1184,33 @@ Item {
                             onLoaded: {
                                 if (item && item.close)
                                     item.close.connect(function() { root.close(); });
+                                bodyScroll.contentY = 0;
                             }
+                        }
+
+                        // Slim scroll indicator on the right edge — only
+                        // visible while overflow exists. Tracks the
+                        // viewport position so the user has a hint that
+                        // more content is below.
+                        Rectangle {
+                            visible: bodyScroll.contentHeight > bodyScroll.height
+                            anchors.right: parent.right
+                            anchors.rightMargin: 2
+                            width: 3
+                            radius: 1.5
+                            color: root.seal
+                            opacity: 0.55
+                            y: bodyScroll.contentHeight > 0
+                               ? (bodyScroll.contentY / bodyScroll.contentHeight) * bodyScroll.height
+                               : 0
+                            height: bodyScroll.contentHeight > 0
+                                    ? Math.max(20, (bodyScroll.height / bodyScroll.contentHeight) * bodyScroll.height)
+                                    : 0
                         }
                     }
                 }
+
+                } // end of quickContainer
 
                 // No focus indicator on TextInput — the caret and the
                 // live count above act as the focus tell. Hidden entirely
