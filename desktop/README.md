@@ -108,39 +108,86 @@ Reads `~/.config/omarchy/current/theme/colors.toml` and remaps:
 | accent | info accent | `indigo` |
 | color1 | active marker, alerts | `seal` (drift-modulated) |
 
-Parsing lives in `Palette.js`: `parse(text)` returns a plain object keyed by semantic name, `apply(theme, palette)` writes it onto the live `Theme` instance.
+Parsing lives in `Palette.js`:
+
+- `parseAll(text)` returns every `key = "value"` pair from a colors.toml.
+- `mapKeys(raw)` renames the six keys this shell uses onto semantic slots.
+- `parse(text)` is `parseAll` + `mapKeys`, a one-shot convenience.
+- `apply(theme, palette)` writes a parsed palette onto the live `Theme` instance.
 
 ### Hook-driven refresh
 
-`omarchy theme set <name>` rewrites `colors.toml` atomically (`rm -rf` + `mv` of the whole theme directory), which breaks inotify-style watching. The desktop instead relies on omarchy's `~/.config/omarchy/hooks/theme-set` hook to push a refresh:
+`omarchy theme set <name>` rewrites `colors.toml` atomically (`rm -rf` + `mv` of the whole theme directory), which breaks inotify-style watching. The desktop instead relies on omarchy's `~/.config/omarchy/hooks/theme-set` hook to push a fully-parsed palette via DBus and Quickshell IPC. Listeners never have to touch `colors.toml` themselves.
 
 ```sh
 # ~/.config/omarchy/hooks/theme-set
 
 # (whatever else the hook does — cava reload, etc.)
 
-# Broadcast the swap on the session bus for any external listener.
+# Parse colors.toml once into JSON and push to every listener.
 theme_name="$(cat "$HOME/.config/omarchy/current/theme.name" 2>/dev/null)"
-dbus-send --session --type=signal /org/omarchy/Theme \
-    org.omarchy.Theme.Changed "string:${theme_name}" 2>/dev/null || true
+colors_file="$HOME/.config/omarchy/current/theme/colors.toml"
 
-# Drive the in-shell palette refresh.
-qs -c desktop ipc call theme reload 2>/dev/null || true
+payload="$(python3 - "$theme_name" "$colors_file" <<'PY' 2>/dev/null
+import json, re, sys
+name, path = sys.argv[1], sys.argv[2]
+colors = {}
+try:
+    with open(path) as f:
+        for line in f:
+            m = re.match(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"([^"]+)"', line)
+            if m: colors[m.group(1).lower()] = m.group(2)
+except OSError:
+    pass
+print(json.dumps({"name": name, "colors": colors}, separators=(",", ":")))
+PY
+)"
+
+if [ -n "$payload" ]; then
+    dbus-send --session --type=signal /org/omarchy/Theme \
+        org.omarchy.Theme.Changed "string:${payload}" 2>/dev/null || true
+    qs -c desktop ipc call theme apply "${payload}" 2>/dev/null || true
+fi
 ```
 
-The IPC call is what actually repaints the bar and palette. The DBus signal is for *anyone else* who wants to react (cliamp, gtk reload helpers, your own scripts) — Quickshell 0.3.0 has no native DBus listener, so the in-shell path is IPC. Both lines no-op silently when the desktop isn't running.
+The DBus signal carries the parsed palette in one `string` argument. The Quickshell IPC delivers the same payload to the in-shell desktop, which `JSON.parse`s it and applies the colours without touching the file. Both lines no-op silently when the desktop isn't running.
 
-On reload, `seal` saturation rides a 200ms rise and 2.8s taper (`driftDelay` + `driftAnim` in `Theme.qml`), so a theme swap reads as a deliberate breath rather than a hard cut.
+On apply, `seal` saturation rides a 200ms rise and 2.8s taper (`driftDelay` + `driftAnim` in `Theme.qml`), so a theme swap reads as a deliberate breath rather than a hard cut.
+
+### Payload shape
+
+```json
+{
+  "name": "kanagawa-dragon",
+  "colors": {
+    "background": "#181616",
+    "foreground": "#c5c9c5",
+    "accent":     "#658594",
+    "color1":     "#c4746e",
+    "color7":     "#c8c093",
+    "color8":     "#a6a69c",
+    "color0":     "#0d0c0c",
+    "color9":     "...",
+    "...":        "..."
+  }
+}
+```
+
+`colors` is the full set of `key = "value"` pairs from the active `colors.toml` (typically ~22 keys: `background`, `foreground`, `accent`, `cursor`, `selection_foreground`, `selection_background`, `color0..color15`). Consumers pick the keys they care about.
 
 ### External listeners
 
-Any process can subscribe to the broadcast directly:
+Any process can subscribe directly. `dbus-monitor` in default mode prints the payload as a quoted JSON string:
 
 ```sh
-dbus-monitor --session "type='signal',interface='org.omarchy.Theme',member='Changed'"
+dbus-monitor --session "type='signal',interface='org.omarchy.Theme',member='Changed'" \
+  | grep --line-buffered '"name"' \
+  | sed -u 's/^[[:space:]]*string "//; s/"$//' \
+  | while read -r json; do
+      bg=$(echo "$json" | jq -r '.colors.background')
+      echo "new background: $bg"
+    done
 ```
-
-Each emission carries the new theme name as the signal's single string argument.
 
 ## IPC
 

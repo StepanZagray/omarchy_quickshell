@@ -3,9 +3,9 @@ import Quickshell
 import Quickshell.Io
 import "Palette.js" as Palette
 
-// Live palette from omarchy's colors.toml. Reloaded on demand via the
-// `theme reload` IPC call that ~/.config/omarchy/hooks/theme-set fires
-// after each `omarchy theme set` — see desktop/README.md for the hook.
+// Live palette from omarchy's colors.toml. Startup reads the file once;
+// every subsequent swap arrives as a JSON payload via `theme apply` IPC,
+// pushed by ~/.config/omarchy/hooks/theme-set. See desktop/README.md.
 //
 // `seal` rides a `driftAmount` saturation bump on every reload (200ms
 // rise, 2.8s taper) so a theme swap reads as a deliberate breath. The
@@ -77,6 +77,18 @@ Item {
 
     IpcHandler {
         target: "theme"
+        // Push path: hook parses colors.toml and ships the result here as a
+        // JSON string. Payload shape: { name: "<theme>", colors: { rawKey: hex, ... } }
+        function apply(payload: string): void {
+            try {
+                const p = JSON.parse(payload);
+                if (p && p.colors) {
+                    Palette.apply(theme, Palette.mapKeys(p.colors));
+                    driftDelay.restart();
+                }
+            } catch (_) {}
+        }
+        // Manual rescue: re-read colors.toml from disk and apply.
         function reload(): void {
             paletteFile.reload();
             driftDelay.restart();
