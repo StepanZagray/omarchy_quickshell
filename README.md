@@ -2,6 +2,12 @@
 
 Personal [Quickshell](https://quickshell.outfoxxed.me) configs built for [omarchy](https://omarchy.org). They read the live omarchy palette at `~/.config/omarchy/current/theme/colors.toml`, so the bar and overlay restyle themselves whenever you run `omarchy theme set <name>`.
 
+
+
+https://github.com/user-attachments/assets/a5bf641b-ccff-41bd-a14c-619ed5c3321a
+
+
+
 | Module | What it does |
 | --- | --- |
 | [`desktop/`](./desktop) | Top bar plus omni-menu command palette in a single Quickshell process. Kanagawa Dragon layout on the live omarchy palette, kanji workspace markers, click-through popups for calendar / screenshots / display / weather / aether blueprints, and a fused command palette over installed apps and the omarchy-menu (synonyms — "wallpaper" finds Background, "reboot" finds Restart). |
