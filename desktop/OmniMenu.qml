@@ -4,6 +4,7 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
+import Quickshell.Hyprland
 import "Data.js" as Data
 
 // Omni-menu palette. Fuses installed apps (.desktop scan) with every
@@ -566,6 +567,27 @@ Item {
         }
     }
 
+    // ---------- Global shortcuts ----------
+    // Direct wlroots global-shortcut binding. Hyprland delivers the
+    // keypress over its socket straight to this running shell, so
+    // SUPER+SPACE no longer pays for a fresh `qs` client process (the
+    // dominant ~50-150ms of perceived "boot" before any pixel changes).
+    // Bind in Hyprland with:
+    //   bind = SUPER, SPACE, global, quickshell:palette-toggle
+    //   bind = ALT,   SPACE, global, quickshell:palette-quick
+    GlobalShortcut {
+        appid: "quickshell"
+        name: "palette-toggle"
+        description: "Toggle omni-menu palette"
+        onPressed: root.toggle()
+    }
+    GlobalShortcut {
+        appid: "quickshell"
+        name: "palette-quick"
+        description: "Open omni-menu pivoted to Quick"
+        onPressed: { root.open(); root.categoryFilter = "Quick"; }
+    }
+
     // ---------- Panel ----------
     PanelWindow {
         id: panel
@@ -578,10 +600,15 @@ Item {
         WlrLayershell.keyboardFocus: root.visible_ ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
         property real reveal: root.visible_ ? 1 : 0
+        // Short open easing so SUPER+SPACE reads as instant: a 90ms
+        // OutQuad lands in the first paintable frame after the global
+        // shortcut fires (target ~16-32ms) and finishes before the eye
+        // settles on the card. Close stays a touch slower so dismissal
+        // still feels deliberate.
         Behavior on reveal {
             NumberAnimation {
-                duration: root.visible_ ? 220 : 140
-                easing.type: root.visible_ ? Easing.OutCubic : Easing.InCubic
+                duration: root.visible_ ? 90 : 110
+                easing.type: root.visible_ ? Easing.OutQuad : Easing.InQuad
             }
         }
 

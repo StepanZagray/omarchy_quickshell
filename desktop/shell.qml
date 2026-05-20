@@ -8,9 +8,11 @@ import Quickshell
 // Launch with:
 //   qs -n -d -c desktop
 //
-// Toggle the palette from a Hyprland keybind:
-//   bind = SUPER, SPACE, exec, qs -c desktop ipc call palette toggle
-//   bind = ALT,   SPACE, exec, qs -c desktop ipc call palette openCategory Quick
+// Toggle the palette from a Hyprland keybind. The shell registers
+// GlobalShortcut entries so the keypress is delivered to the running
+// process directly (no `qs` client fork on the hot path):
+//   bind = SUPER, SPACE, global, quickshell:palette-toggle
+//   bind = ALT,   SPACE, global, quickshell:palette-quick
 ShellRoot {
     id: root
 
