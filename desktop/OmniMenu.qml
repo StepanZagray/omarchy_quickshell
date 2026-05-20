@@ -85,13 +85,14 @@ Item {
     // to nav telemetry for instantaneous state; clicking one drops an
     // expanded detail panel below the grid with that tile's adjustments.
     readonly property bool quickMode: root.categoryFilter === "Quick"
-    // Tile layout flips to a single-column strip when a tile is expanded
-    // so the detail panel can take the full left half of the card. The
-    // 4-col grid is the default for the unexpanded glance view.
-    readonly property int  quickGridCols: (root.quickMode && root.expandedTile !== null) ? 1 : 4
     // null = no expansion; otherwise the tile object whose detail panel
     // is currently revealed under the grid.
     property var expandedTile: null
+    // Single source of truth for "in Quick mode with a tile open" — the
+    // grid column count, the compressed-tile flag, and the side-panel
+    // visibility all key off it.
+    readonly property bool quickExpanded: quickMode && expandedTile !== null
+    readonly property int  quickGridCols: quickExpanded ? 1 : 4
     function expandTile(t) {
         if (!t) { root.expandedTile = null; return; }
         // Click same tile to collapse; click a different tile to swap.
@@ -103,22 +104,61 @@ Item {
     Bookmarks { id: bookmarks }
 
     // ---------- Quick tiles ----------
-    // Hardcoded so each entry can bind its sub-label to live navbar
-    // telemetry. Order matches the Samsung-style quick panel — most
-    // glanced (battery/audio/wifi/bt) first. `action` is a shell command
-    // run via the same Process the standard activate() uses; popup
-    // togglers call back into the navbar's own IPC handlers so the
-    // existing animations & anchoring just work.
-    readonly property var quickTiles: {
+    // Split into a *static* base array (the Repeater's model) and a
+    // *dynamic* dict of per-tile live data, indexed by tile.key. The
+    // base never changes, so the Repeater's 12 delegates are built once
+    // and never torn down — clicks and hover state survive across
+    // navbar ticks. Dynamic fields (glyph/label/sub/tone) read out of
+    // `quickTilesDyn` via the `tileDyn()` helper; when the dict swaps,
+    // only the delegate's text/color bindings re-evaluate. Order
+    // matches the Samsung-style quick panel — most glanced
+    // (battery/audio/wifi/bt) first.
+    readonly property var quickTilesBase: [
+        { key: "battery",     keywords: "battery power charge plugged ac percent watt",
+          action: "omarchy-menu power" },
+        { key: "audio",       keywords: "audio sound speaker volume mute pulse pipewire",
+          action: "omarchy-launch-audio", longAction: "pamixer -t" },
+        { key: "network",     keywords: "wifi wireless network internet ssid signal ethernet eth",
+          action: "omarchy-launch-wifi" },
+        { key: "bluetooth",   keywords: "bluetooth bt pair device headset speaker keyboard",
+          action: "omarchy-launch-bluetooth" },
+        { key: "weather",     keywords: "weather forecast temperature wttr rain sun wind",
+          action: "qs -c desktop ipc call weather toggle",
+          longAction: "qs -c desktop ipc call weather refresh" },
+        { key: "display",     keywords: "display monitor brightness warmth gamma night light blue temperature dim",
+          action: "qs -c desktop ipc call display toggle",
+          longAction: "qs -c desktop ipc call display reset" },
+        { key: "aether",      keywords: "aether theme blueprint palette swatch picker wallpaper",
+          action: "qs -c desktop ipc call aether toggle",
+          longAction: "sh -c 'aether --generate \"$(aether --random-wallpaper)\"'" },
+        { key: "cpu",         keywords: "cpu processor memory monitor btop top htop performance load",
+          action: "omarchy-launch-or-focus-tui btop" },
+        { key: "calendar",    keywords: "calendar date month day today schedule planner",
+          action: "qs -c desktop ipc call calendar toggle" },
+        { key: "screenshots", keywords: "screenshots shots browse pictures captures images gallery",
+          action: "qs -c desktop ipc call screenshots toggle",
+          longAction: "omarchy-capture-screenshot" },
+        { key: "videos",      keywords: "videos films clips recordings browse gallery library",
+          action: "qs -c desktop ipc call videos toggle" },
+        { key: "power",       keywords: "power menu suspend hibernate logout restart shutdown lock",
+          action: "omarchy-menu power" }
+    ]
+
+    // Dynamic per-tile data — keyed by tile.key. Gated on `visible_`
+    // so navbar ticks don't wake the rebuild while the palette is
+    // closed (the previous snapshot keeps the Repeater happy when the
+    // user re-opens, before this binding re-evaluates).
+    property var _quickTilesDynCache: ({})
+    readonly property var quickTilesDyn: {
+        if (!root.visible_) return root._quickTilesDynCache;
         const n = root.navbar;
-        if (!n) return [];
+        if (!n) return ({});
         const chargingTag = n.batState === "Charging"    ? " · CHARGING"
                           : n.batState === "Full"        ? " · FULL"
                           : n.batState === "Not charging" ? " · PLUGGED"
                           : "";
-        return [
-            {
-                key: "battery",
+        const dyn = {
+            battery: {
                 glyph: n.batteryIcon(),
                 label: "BATTERY",
                 sub: n.batVal + "%" + chargingTag
@@ -127,22 +167,15 @@ Item {
                         : ""),
                 tone: n.batVal <= 10 ? n.seal
                                      : n.batVal <= 20 ? n.indigo
-                                                      : n.ink,
-                keywords: "battery power charge plugged ac percent watt",
-                action: "omarchy-menu power"
+                                                      : n.ink
             },
-            {
-                key: "audio",
+            audio: {
                 glyph: n.audioIcon,
                 label: "AUDIO",
                 sub: n.audioMuted ? "MUTED" : (n.audioVol + "%"),
-                tone: n.audioMuted ? n.seal : n.ink,
-                keywords: "audio sound speaker volume mute pulse pipewire",
-                action: "omarchy-launch-audio",
-                longAction: "pamixer -t"
+                tone: n.audioMuted ? n.seal : n.ink
             },
-            {
-                key: "network",
+            network: {
                 glyph: n.netIcon,
                 label: n.netKind === "wifi" ? "WI-FI"
                        : n.netKind === "eth"  ? "ETHERNET"
@@ -150,107 +183,56 @@ Item {
                 sub: n.netKind === "wifi"
                      ? ((n.wifiSsid || "(hidden)") + " · " + n.wifiSignal + "%")
                      : n.netKind === "eth" ? "CONNECTED" : "—",
-                tone: n.netKind === "none" ? n.inkDeep : n.ink,
-                keywords: "wifi wireless network internet ssid signal ethernet eth",
-                action: "omarchy-launch-wifi"
+                tone: n.netKind === "none" ? n.inkDeep : n.ink
             },
-            {
-                key: "bluetooth",
+            bluetooth: {
                 glyph: n.btIcon,
                 label: "BLUETOOTH",
                 sub: !n.btPowered ? "OFF"
                                   : (n.btCount > 0 ? n.btCount + " CONN" : "ON"),
-                tone: !n.btPowered ? n.inkDeep : n.ink,
-                keywords: "bluetooth bt pair device headset speaker keyboard",
-                action: "omarchy-launch-bluetooth"
+                tone: !n.btPowered ? n.inkDeep : n.ink
             },
-            {
-                key: "weather",
+            weather: {
                 glyph: n.weatherUnavailable ? "?"
                      : (n.weatherLoaded ? n.weatherIcon : "·"),
                 label: "WEATHER",
                 sub: n.weatherUnavailable ? "OFFLINE"
                      : (n.weatherLoaded ? Math.round(n.weatherTempC) + "°C" : "…"),
-                tone: n.weatherUnavailable ? n.inkDeep : n.ink,
-                keywords: "weather forecast temperature wttr rain sun wind",
-                action: "qs -c desktop ipc call weather toggle",
-                longAction: "qs -c desktop ipc call weather refresh"
+                tone: n.weatherUnavailable ? n.inkDeep : n.ink
             },
-            {
-                key: "display",
+            display: {
                 glyph: n.icoDisplay,
                 label: "DISPLAY",
                 sub: n.brightnessPct + "%"
                      + (n.warmthK < 6500 ? "  " + n.warmthK + "K" : ""),
                 tone: (n.warmthK < 6500 || n.gammaPct !== 100 || n.brightnessPct < 100)
-                      ? n.seal : n.ink,
-                keywords: "display monitor brightness warmth gamma night light blue temperature dim",
-                action: "qs -c desktop ipc call display toggle",
-                longAction: "qs -c desktop ipc call display reset"
+                      ? n.seal : n.ink
             },
-            {
-                key: "aether",
-                glyph: n.icoAether,
-                label: "AETHER",
-                sub: "THEMES",
-                tone: n.ink,
-                keywords: "aether theme blueprint palette swatch picker wallpaper",
-                action: "qs -c desktop ipc call aether toggle",
-                longAction: "sh -c 'aether --generate \"$(aether --random-wallpaper)\"'"
-            },
-            {
-                key: "cpu",
+            aether:      { glyph: n.icoAether, label: "AETHER", sub: "THEMES", tone: n.ink },
+            cpu: {
                 glyph: "󰍛",
                 label: "CPU",
                 sub: Math.round(n.cpuVal) + "%",
-                tone: n.cpuVal > 80 ? n.seal : n.ink,
-                keywords: "cpu processor memory monitor btop top htop performance load",
-                action: "omarchy-launch-or-focus-tui btop"
+                tone: n.cpuVal > 80 ? n.seal : n.ink
             },
-            {
-                key: "calendar",
-                glyph: "󰃭",
-                label: "CALENDAR",
-                sub: n.dd + " " + n.mon,
-                tone: n.ink,
-                keywords: "calendar date month day today schedule planner",
-                action: "qs -c desktop ipc call calendar toggle"
-            },
-            {
-                key: "screenshots",
-                glyph: n.icoCamera,
-                label: "SHOTS",
-                sub: "BROWSE",
-                tone: n.ink,
-                keywords: "screenshots shots browse pictures captures images gallery",
-                action: "qs -c desktop ipc call screenshots toggle",
-                longAction: "omarchy-capture-screenshot"
-            },
-            {
-                key: "videos",
-                glyph: n.icoFilm,
-                label: "VIDEOS",
-                sub: "BROWSE",
-                tone: n.ink,
-                keywords: "videos films clips recordings browse gallery library",
-                action: "qs -c desktop ipc call videos toggle"
-            },
-            {
-                key: "power",
-                glyph: n.icoPower,
-                label: "POWER",
-                sub: "MENU",
-                tone: n.ink,
-                keywords: "power menu suspend hibernate logout restart shutdown lock",
-                action: "omarchy-menu power"
-            }
-        ];
+            calendar:    { glyph: "󰃭",          label: "CALENDAR",    sub: n.dd + " " + n.mon, tone: n.ink },
+            screenshots: { glyph: n.icoCamera,  label: "SHOTS",       sub: "BROWSE",           tone: n.ink },
+            videos:      { glyph: n.icoFilm,    label: "VIDEOS",      sub: "BROWSE",           tone: n.ink },
+            power:       { glyph: n.icoPower,   label: "POWER",       sub: "MENU",             tone: n.ink }
+        };
+        root._quickTilesDynCache = dyn;
+        return dyn;
     }
+
+    // Resolve the dynamic side of a base tile. Returns an empty object
+    // (not undefined) so delegate bindings can chain `.glyph` / `.sub`
+    // without an `?.` chain on every read.
+    function tileDyn(t) { return (t && root.quickTilesDyn[t.key]) || ({}); }
 
     // No search field in quickMode — tiles are always the full set so
     // grid arithmetic (gridCols * row) stays predictable. Kept as a
     // separate property so non-quick code paths don't need to branch.
-    readonly property var filteredQuickTiles: root.quickTiles
+    readonly property var filteredQuickTiles: root.quickTilesBase
 
     // Same launch envelope as activate() so popup IPCs (qs ipc call …)
     // get fired off-process and quickshell can close immediately.
@@ -675,7 +657,7 @@ Item {
                 // instead of the tile grid. Bodies return true from
                 // kbdHandle() to swallow the event; anything they leave
                 // unhandled (e.g. Esc) bubbles to the cascade below.
-                if (root.quickMode && root.expandedTile !== null
+                if (root.quickExpanded
                     && bodyLoader.item
                     && typeof bodyLoader.item.kbdHandle === "function"
                     && bodyLoader.item.kbdHandle(e2)) {
@@ -688,7 +670,7 @@ Item {
                     // unwind drill-down, then close. Each Esc undoes
                     // exactly one layer of state so the palette never
                     // exits with a half-typed query on screen.
-                    if (root.quickMode && root.expandedTile !== null) {
+                    if (root.quickExpanded) {
                         root.expandedTile = null;
                     } else if (root.query.length > 0) {
                         root.query = "";
@@ -872,7 +854,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: {
                             if (root.quickMode) {
-                                return root.expandedTile !== null
+                                return root.quickExpanded
                                     ? "HJKL / ↑↓←→  ·  TAB SECT  ·  ↵ APPLY  ·  ESC BACK"
                                     : "HJKL / ↑↓←→  ·  ↵ OPEN  ·  ESC BACK";
                             }
@@ -911,15 +893,12 @@ Item {
                 Item {
                     id: quickGrid
                     visible: root.quickMode
-                    // Collapsed: fill the card from the left. Expanded:
-                    // compress to a narrow column on the left edge so the
-                    // detail panel gets the wider right half.
-                    readonly property bool colMode: root.expandedTile !== null
+                    // Expanded: compress to a narrow column on the left
+                    // edge so the detail panel gets the wider right half.
+                    readonly property bool colMode: root.quickExpanded
                     anchors.top: parent.top
                     anchors.left: parent.left
                     width: colMode ? 64 : parent.width
-                    // Auto-size to content: 4-col grid full-width, or a
-                    // single compact column when colMode swaps in.
                     readonly property int tileH: colMode ? 42 : 86
                     readonly property int spacing: colMode ? 4 : 10
                     readonly property int rows: visible
@@ -967,9 +946,10 @@ Item {
                                     spacing: quickGrid.colMode ? 0 : 3
 
                                     Text {
+                                        readonly property var dyn: root.tileDyn(tileSlot.modelData)
                                         anchors.horizontalCenter: parent.horizontalCenter
-                                        text: tileSlot.modelData.glyph
-                                        color: tileSlot.modelData.tone
+                                        text: dyn.glyph || ""
+                                        color: dyn.tone || root.ink
                                         font.family: root.mono
                                         font.pixelSize: quickGrid.colMode ? 14 : 20
                                     }
@@ -978,7 +958,7 @@ Item {
                                         width: parent.width
                                         horizontalAlignment: Text.AlignHCenter
                                         elide: Text.ElideRight
-                                        text: tileSlot.modelData.label
+                                        text: root.tileDyn(tileSlot.modelData).label || ""
                                         color: root.ink
                                         font.family: root.mono
                                         font.pixelSize: quickGrid.colMode ? 7 : 9
@@ -992,12 +972,11 @@ Item {
                                     // the card's vertical budget.
                                     Text {
                                         visible: !quickGrid.colMode
-                                        height: visible ? implicitHeight : 0
                                         anchors.horizontalCenter: parent.horizontalCenter
                                         width: parent.width
                                         horizontalAlignment: Text.AlignHCenter
                                         elide: Text.ElideRight
-                                        text: tileSlot.modelData.sub
+                                        text: root.tileDyn(tileSlot.modelData).sub || ""
                                         color: root.inkDeep
                                         font.family: root.mono
                                         font.pixelSize: 8
@@ -1035,7 +1014,7 @@ Item {
                 // grid's right edge so it tracks the column's width.
                 Rectangle {
                     id: quickMidSep
-                    visible: root.quickMode && root.expandedTile !== null
+                    visible: root.quickExpanded
                     anchors.left: quickGrid.right
                     anchors.leftMargin: 16
                     anchors.top: parent.top
@@ -1053,7 +1032,7 @@ Item {
                 // footprint.
                 Item {
                     id: detailPanel
-                    visible: root.quickMode && root.expandedTile !== null
+                    visible: root.quickExpanded
                     anchors.left: quickMidSep.right
                     anchors.leftMargin: 16
                     anchors.right: parent.right
@@ -1108,8 +1087,9 @@ Item {
                         anchors.topMargin: 6
                         spacing: 12
                         Text {
-                            text: detailPanel.t ? detailPanel.t.glyph : ""
-                            color: detailPanel.t ? detailPanel.t.tone : root.ink
+                            readonly property var dyn: root.tileDyn(detailPanel.t)
+                            text: dyn.glyph || ""
+                            color: dyn.tone || root.ink
                             font.family: root.mono
                             font.pixelSize: 26
                             Layout.alignment: Qt.AlignVCenter
@@ -1119,7 +1099,7 @@ Item {
                             Layout.alignment: Qt.AlignVCenter
                             spacing: 2
                             Text {
-                                text: detailPanel.t ? detailPanel.t.label : ""
+                                text: root.tileDyn(detailPanel.t).label || ""
                                 color: root.ink
                                 font.family: root.mono
                                 font.pixelSize: 13
@@ -1127,7 +1107,7 @@ Item {
                                 font.weight: Font.Medium
                             }
                             Text {
-                                text: detailPanel.t ? detailPanel.t.sub : ""
+                                text: root.tileDyn(detailPanel.t).sub || ""
                                 color: root.inkDeep
                                 font.family: root.mono
                                 font.pixelSize: 10
