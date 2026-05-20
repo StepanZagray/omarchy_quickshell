@@ -2,7 +2,7 @@
 
 Personal [Quickshell](https://quickshell.outfoxxed.me) configs built for [omarchy](https://omarchy.org). They read the live omarchy palette at `~/.config/omarchy/current/theme/colors.toml`, so the bar and overlay restyle themselves whenever you run `omarchy theme set <name>`.
 
-[[video src="https://github.com/justindotdevv/quickshell/raw/add/demo-video-in-README/demo-video.mp4"]]
+https://github.com/justindotdevv/quickshell/assets/demo-video.mp4
 
 | Module | What it does |
 | --- | --- |
