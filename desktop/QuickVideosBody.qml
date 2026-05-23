@@ -20,7 +20,7 @@ Item {
     Component.onCompleted: if (body.nav) body.nav.refreshVideos()
 
     property int kbdIndex: 1
-    readonly property var _items: body.nav ? body.nav.videoFiles.slice(0, cols * 3) : []
+    readonly property var _items: body.nav ? body.nav.videoFiles.slice(0, cols * 4) : []
     readonly property int _kbdMax: 1 + _items.length
 
     function kbdHandle(event) {
