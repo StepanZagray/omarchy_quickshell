@@ -19,7 +19,7 @@ Item {
     Component.onCompleted: if (body.nav) body.nav.refreshScreenshots()
 
     property int kbdIndex: 1   // 0 = CAPTURE, 1..N = thumbs
-    readonly property var _items: body.nav ? body.nav.screenshotFiles.slice(0, cols * 2) : []
+    readonly property var _items: body.nav ? body.nav.screenshotFiles.slice(0, cols * 3) : []
     readonly property int _kbdMax: 1 + _items.length
 
     function kbdHandle(event) {
