@@ -47,7 +47,8 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.horizontalCenterOffset: slideX
         anchors.verticalCenter: parent.verticalCenter
-        anchors.verticalCenterOffset: slideY
+        // -1 lift matches Module.qml so kanji optically align with icons.
+        anchors.verticalCenterOffset: slideY - 1
         text: wsCell.label
         color: wsCell.active ? wsCell.root.seal : (wsCell.present ? wsCell.root.ink : wsCell.root.inkDeep)
         opacity: wsCell.active ? 1.0 : (wsCell.present ? 0.75 : 0.35)

@@ -129,6 +129,7 @@ PanelWindow {
                 id: clockOneLine
                 visible: bar.root.isHorizontal
                 anchors.centerIn: parent
+                anchors.verticalCenterOffset: -1
                 text: bar.root.hh + ":" + bar.root.mm
                 color: clockMouse.containsMouse ? bar.root.seal : bar.root.ink
                 font.family: bar.root.mono
@@ -200,6 +201,9 @@ PanelWindow {
             anchors.right: parent.right
             anchors.rightMargin: bar.cloudMode ? bar.cloudAir + bar.cloudPad + 2 : 10
             anchors.verticalCenter: parent.verticalCenter
+            // Match the -1 optical lift applied to icons / clock so the
+            // pill sits on the same baseline as the rest of the bar row.
+            anchors.verticalCenterOffset: -1
             height: 16
             width: musicPill.width
             z: 10
