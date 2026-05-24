@@ -18,6 +18,8 @@ https://github.com/user-attachments/assets/a5bf641b-ccff-41bd-a14c-619ed5c3321a
 | [`clipboard-ripple/`](./clipboard-ripple) | Clipboard tactile feedback. `wl-paste --watch` blooms a soft accent-tinted halo outward from the cursor while a brighter inner core pulses twice. Click-through overlay. |
 | [`battery-drip/`](./battery-drip) | Rare, high-information battery feedback. Crossings of 20% / 10% drip a teardrop down the right edge of the bar; transition to Full (or plug-in already near full) fills a battery outline with a rising sinusoidal wave. Click-through overlay. |
 | [`quickapps/`](./quickapps) | Radial quick-app launcher. Eight to ten favourite apps arranged around a single faint indigo ring with kanji counter and serif typography. Reads `~/.config/omarchy-quickapps/apps.json`; bind to a Hyprland key for a Spotlight-style launch. |
+| [`screensaver/`](./screensaver) | Fullscreen shader screensaver with a retro-computing / hacker bent. Eleven GLSL programs (plasma, fluid, transparent CRT overlay, digital rain, xxd hex dump, stack-smash visualiser, Space Invaders attract, DOOM fire, fake terminal, Mr. Robot hacking sequence, Conway's Life) cross-fade on a 22 s cycle, all tinted live from the omarchy palette. Life uses a recursive ShaderEffectSource for cell-state feedback; the rest are stateless. IPC-triggered: `qs -c screensaver ipc call saver toggle`. Any input dismisses; `1`-`9` jumps directly, Tab cycles, `ipc call saver pick 9` / `pick 10` selects the over-flow slots. |
+| [`backgrounds/`](./backgrounds) | Subtle fluid-shader wallpaper. Ten low-contrast GLSL backgrounds (drift, veil, mist, ripple, silk, caustics, breath, smoke, dunes, aurora) cycle every 90 s with a 4 s cross-fade, all tinted from the omarchy palette. Runs on the Wayland Background layer in place of omarchy's wallpaper. IPC: `qs -c backgrounds ipc call bg next \| pick N \| hold \| cycle \| reload`. |
 
 Each module is a self-contained Quickshell config rooted at `shell.qml`.
 
@@ -54,6 +56,17 @@ qs -n -d -c battery-drip
 
 # launch the quickapps radial launcher (bind to a key, no daemon needed)
 qs -n -c quickapps
+
+# launch the screensaver daemon, then trigger / dismiss it via IPC
+qs -n -d -c screensaver
+# toggle from a Hyprland keybind:
+#   bind = SUPER, F12, exec, qs -c screensaver ipc call saver toggle
+
+# launch the fluid-shader wallpaper (replaces omarchy's wallpaper)
+qs -n -d -c backgrounds
+# pick a specific one or pause cycling:
+#   qs -c backgrounds ipc call bg pick 4
+#   qs -c backgrounds ipc call bg hold
 ```
 
 `-c <name>` resolves to `~/.config/quickshell/<name>/shell.qml`. `-d` daemonizes, `-n` makes it idempotent.
