@@ -1,11 +1,11 @@
 import QtQuick
-import QtQuick.Layouts
-import QtQuick.Effects
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 import Quickshell.Hyprland
 import "Data.js" as Data
+import "omni" as Omni
+import "omni/Tiles.js" as Tiles
 
 // Omni-menu palette. Fuses installed apps (.desktop scan) with every
 // `omarchy-menu` action, scored against title, category, and per-entry
@@ -13,6 +13,18 @@ import "Data.js" as Data
 // Drill-down rows pivot the list to a category, fd file search, gh repo
 // search, processes, or themes. Toggle via:
 //   qs -c desktop ipc call palette toggle
+//
+// Source layout: this file is the entry and keeps all state (search
+// index, scoring, mode flags, IPC, shortcuts, the keyboard handler,
+// and the panel chrome). Visual subtrees live alongside in `omni/`:
+//   omni/HeaderBar.qml       title + count + hint
+//   omni/SearchInput.qml     prompt glyph + query text + caret
+//   omni/QuickContainer.qml  quick-mode tile grid + detail panel
+//   omni/ResultList.qml      ListView + row delegate
+//   omni/PreviewPane.qml     preview header + body for all modes
+//   omni/Footer.qml          exec line for the selected item
+//   omni/Format.js           markdown formatters (tldr, chat)
+//   omni/Tiles.js            quick-tile static data + dyn builder
 Item {
     id: root
 
@@ -132,36 +144,7 @@ Item {
     // only the delegate's text/color bindings re-evaluate. Order
     // matches the Samsung-style quick panel — most glanced
     // (battery/audio/wifi/bt) first.
-    readonly property var quickTilesBase: [
-        { key: "battery",     keywords: "battery power charge plugged ac percent watt",
-          action: "omarchy-menu power" },
-        { key: "audio",       keywords: "audio sound speaker volume mute pulse pipewire",
-          action: "omarchy-launch-audio", longAction: "pamixer -t" },
-        { key: "network",     keywords: "wifi wireless network internet ssid signal ethernet eth",
-          action: "omarchy-launch-wifi" },
-        { key: "bluetooth",   keywords: "bluetooth bt pair device headset speaker keyboard",
-          action: "omarchy-launch-bluetooth" },
-        { key: "weather",     keywords: "weather forecast temperature wttr rain sun wind",
-          action: "qs -c desktop ipc call weather toggle",
-          longAction: "qs -c desktop ipc call weather refresh" },
-        { key: "display",     keywords: "display monitor brightness warmth gamma night light blue temperature dim",
-          action: "qs -c desktop ipc call display toggle",
-          longAction: "qs -c desktop ipc call display reset" },
-        { key: "aether",      keywords: "aether theme blueprint palette swatch picker wallpaper",
-          action: "qs -c desktop ipc call aether toggle",
-          longAction: "sh -c 'aether --generate \"$(aether --random-wallpaper)\"'" },
-        { key: "cpu",         keywords: "cpu processor memory monitor btop top htop performance load",
-          action: "omarchy-launch-or-focus-tui btop" },
-        { key: "calendar",    keywords: "calendar date month day today schedule planner",
-          action: "qs -c desktop ipc call calendar toggle" },
-        { key: "screenshots", keywords: "screenshots shots browse pictures captures images gallery",
-          action: "qs -c desktop ipc call screenshots toggle",
-          longAction: "omarchy-capture-screenshot" },
-        { key: "videos",      keywords: "videos films clips recordings browse gallery library",
-          action: "qs -c desktop ipc call videos toggle" },
-        { key: "power",       keywords: "power menu suspend hibernate logout restart shutdown lock",
-          action: "omarchy-menu power" }
-    ]
+    readonly property var quickTilesBase: Tiles.base
 
     // Dynamic per-tile data — keyed by tile.key. Gated on `visible_`
     // so navbar ticks don't wake the rebuild while the palette is
@@ -170,75 +153,7 @@ Item {
     property var _quickTilesDynCache: ({})
     readonly property var quickTilesDyn: {
         if (!root.visible_) return root._quickTilesDynCache;
-        const n = root.navbar;
-        if (!n) return ({});
-        const chargingTag = n.batState === "Charging"    ? " · CHARGING"
-                          : n.batState === "Full"        ? " · FULL"
-                          : n.batState === "Not charging" ? " · PLUGGED"
-                          : "";
-        const dyn = {
-            battery: {
-                glyph: n.batteryIcon(),
-                label: "BATTERY",
-                sub: n.batVal + "%" + chargingTag
-                     + (n.batPower >= 0.05
-                        ? "  " + n.batPower.toFixed(1) + "W"
-                        : ""),
-                tone: n.batVal <= 10 ? n.seal
-                                     : n.batVal <= 20 ? n.indigo
-                                                      : n.ink
-            },
-            audio: {
-                glyph: n.audioIcon,
-                label: "AUDIO",
-                sub: n.audioMuted ? "MUTED" : (n.audioVol + "%"),
-                tone: n.audioMuted ? n.seal : n.ink
-            },
-            network: {
-                glyph: n.netIcon,
-                label: n.netKind === "wifi" ? "WI-FI"
-                       : n.netKind === "eth"  ? "ETHERNET"
-                                              : "OFFLINE",
-                sub: n.netKind === "wifi"
-                     ? ((n.wifiSsid || "(hidden)") + " · " + n.wifiSignal + "%")
-                     : n.netKind === "eth" ? "CONNECTED" : "—",
-                tone: n.netKind === "none" ? n.inkDeep : n.ink
-            },
-            bluetooth: {
-                glyph: n.btIcon,
-                label: "BLUETOOTH",
-                sub: !n.btPowered ? "OFF"
-                                  : (n.btCount > 0 ? n.btCount + " CONN" : "ON"),
-                tone: !n.btPowered ? n.inkDeep : n.ink
-            },
-            weather: {
-                glyph: n.weatherUnavailable ? "?"
-                     : (n.weatherLoaded ? n.weatherIcon : "·"),
-                label: "WEATHER",
-                sub: n.weatherUnavailable ? "OFFLINE"
-                     : (n.weatherLoaded ? Math.round(n.weatherTempC) + "°C" : "…"),
-                tone: n.weatherUnavailable ? n.inkDeep : n.ink
-            },
-            display: {
-                glyph: n.icoDisplay,
-                label: "DISPLAY",
-                sub: n.brightnessPct + "%"
-                     + (n.warmthK < 6500 ? "  " + n.warmthK + "K" : ""),
-                tone: (n.warmthK < 6500 || n.gammaPct !== 100 || n.brightnessPct < 100)
-                      ? n.seal : n.ink
-            },
-            aether:      { glyph: n.icoAether, label: "AETHER", sub: "THEMES", tone: n.ink },
-            cpu: {
-                glyph: "󰍛",
-                label: "CPU",
-                sub: Math.round(n.cpuVal) + "%",
-                tone: n.cpuVal > 80 ? n.seal : n.ink
-            },
-            calendar:    { glyph: "󰃭",          label: "CALENDAR",    sub: n.dd + " " + n.mon, tone: n.ink },
-            screenshots: { glyph: n.icoCamera,  label: "SHOTS",       sub: "BROWSE",           tone: n.ink },
-            videos:      { glyph: n.icoFilm,    label: "VIDEOS",      sub: "BROWSE",           tone: n.ink },
-            power:       { glyph: n.icoPower,   label: "POWER",       sub: "MENU",             tone: n.ink }
-        };
+        const dyn = Tiles.buildDyn(root.navbar);
         root._quickTilesDynCache = dyn;
         return dyn;
     }
@@ -421,186 +336,6 @@ Item {
         // Processes/Themes own their own clear()-on-deactivate via their
         // `active` binding, so the shell doesn't have to nudge them when
         // the filter changes — they react automatically.
-    }
-
-
-    // ---------- tldr markdown styling ----------
-    // Parses the small markdown dialect tldr emits with `-m` and
-    // returns RichText HTML coloured against the live palette. Bound
-    // (not memoised) so a theme swap repaints automatically. Patterns:
-    //   `# name`      title — skipped (header shows the tool name)
-    //   `> text`      description (ink), inline `code` in indigo
-    //   `- text:`     example label (inkDeep), inline `code` in indigo
-    //   `` `cmd` ``   example command (indigo); {{placeholders}} seal
-    //   other        fallthrough (e.g. "documentation not available")
-    function formatTldrHtml(raw) {
-        if (!raw) return "";
-        // Qt color.toString() returns `#AARRGGBB` for non-opaque
-        // colors (alpha first), which Qt's RichText parser
-        // misinterprets as `#RRGGBB` for the first six digits. Trim
-        // to `#RRGGBB` so translucent palette entries still render
-        // their nominal hue, even if alpha is dropped.
-        function hex(c) {
-            const s = c.toString();
-            return s.length === 9 ? "#" + s.substring(3) : s;
-        }
-        const ink = hex(root.ink);
-        const inkDeep = hex(root.inkDeep);
-        const indigo = hex(root.indigo);
-        const seal = hex(root.seal);
-
-        function esc(s) {
-            return s.replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;");
-        }
-        function wrap(color, text) {
-            return '<span style="color:' + color + '">' + esc(text) + '</span>';
-        }
-        // Inline `code` spans inside prose: split on backticks so the
-        // intervening code segments switch to indigo without changing
-        // the surrounding base colour.
-        function styleProse(s, base) {
-            let out = "", i = 0;
-            while (i < s.length) {
-                const j = s.indexOf("`", i);
-                if (j < 0) { out += wrap(base, s.substring(i)); break; }
-                if (j > i) out += wrap(base, s.substring(i, j));
-                const k = s.indexOf("`", j + 1);
-                if (k < 0) { out += wrap(base, s.substring(j)); break; }
-                out += wrap(indigo, s.substring(j + 1, k));
-                i = k + 1;
-            }
-            return out;
-        }
-        // Code lines: most of the string is indigo, {{placeholders}}
-        // pop in seal so the user sees what they need to fill in.
-        function styleCode(s) {
-            let out = "", i = 0;
-            while (i < s.length) {
-                const j = s.indexOf("{{", i);
-                if (j < 0) { out += wrap(indigo, s.substring(i)); break; }
-                if (j > i) out += wrap(indigo, s.substring(i, j));
-                const k = s.indexOf("}}", j + 2);
-                if (k < 0) { out += wrap(indigo, s.substring(j)); break; }
-                out += wrap(seal, s.substring(j + 2, k));
-                i = k + 2;
-            }
-            return out;
-        }
-
-        const lines = raw.split("\n");
-        const out = [];
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (line.length === 0) { out.push(""); continue; }
-            const c = line.charAt(0);
-            if (c === "#") continue;
-            if (c === ">") { out.push(styleProse(line.substring(1).trim(), ink)); continue; }
-            // Require a space after `-` so markdown rules (`---`) and
-            // any future hyphen-led prose don't get parsed as a tldr
-            // example label (which is always `- text:`).
-            if (c === "-" && line.charAt(1) === " ") { out.push(styleProse(line.substring(1).trim(), inkDeep)); continue; }
-            if (c === "`") {
-                let body = line;
-                if (body.charAt(0) === "`") body = body.substring(1);
-                if (body.charAt(body.length - 1) === "`") body = body.substring(0, body.length - 1);
-                out.push(styleCode(body));
-                continue;
-            }
-            out.push(styleProse(line, inkDeep));
-        }
-        return out.join("<br>");
-    }
-
-    // ---------- chat markdown styling ----------
-    // Renders the LLM's markdown output as palette-aware RichText.
-    // Lean (not CommonMark-spec): handles fenced code blocks, headings
-    // (# / ## / ###), inline `code`, and `-`/`*` bullets. Anything
-    // fancier (bold, italic, links, tables) falls back to plain prose.
-    // baseColor lets callers tint the whole block — used by the chat
-    // preview pane to dim status messages in `inkDeep`.
-    function formatChatHtml(raw, baseColor) {
-        if (!raw) return "";
-        function hex(c) {
-            const s = c.toString();
-            return s.length === 9 ? "#" + s.substring(3) : s;
-        }
-        const ink = baseColor ? hex(baseColor) : hex(root.ink);
-        const inkDeep = hex(root.inkDeep);
-        const indigo = hex(root.indigo);
-        const seal = hex(root.seal);
-
-        function esc(s) {
-            return s.replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;");
-        }
-        function wrap(color, text) {
-            return '<span style="color:' + color + '">' + esc(text) + '</span>';
-        }
-        // Inline `code` only — keep bold/italic out so the LLM's
-        // stray asterisks (common in prose) don't get eaten.
-        function styleInline(s, base) {
-            let out = "", i = 0;
-            while (i < s.length) {
-                const j = s.indexOf("`", i);
-                if (j < 0) { out += wrap(base, s.substring(i)); break; }
-                if (j > i) out += wrap(base, s.substring(i, j));
-                const k = s.indexOf("`", j + 1);
-                if (k < 0) { out += wrap(base, s.substring(j)); break; }
-                out += wrap(indigo, s.substring(j + 1, k));
-                i = k + 1;
-            }
-            return out;
-        }
-
-        const lines = raw.split("\n");
-        const out = [];
-        let inCode = false;
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const trimmed = line.replace(/^\s+/, "");
-            // Fenced code block delimiter — toggle state, drop the
-            // fence line itself.
-            if (trimmed.indexOf("```") === 0) {
-                inCode = !inCode;
-                continue;
-            }
-            if (inCode) {
-                // Preserve indentation; render whole line in indigo.
-                out.push(wrap(indigo, line));
-                continue;
-            }
-            if (line.length === 0) { out.push(""); continue; }
-            // Headings
-            if (line.charAt(0) === "#") {
-                let level = 0;
-                while (level < line.length && line.charAt(level) === "#") level++;
-                if (level <= 4) {
-                    const body = line.substring(level).trim();
-                    if (body.length > 0) {
-                        out.push("<b>" + styleInline(body, ink) + "</b>");
-                        continue;
-                    }
-                }
-            }
-            // Bullets — accept `- ` or `* ` with the required space so
-            // bare hyphens / asterisks in prose don't get eaten.
-            if ((line.charAt(0) === "-" || line.charAt(0) === "*")
-                && line.charAt(1) === " ") {
-                out.push(wrap(seal, "• ") + styleInline(line.substring(2), ink));
-                continue;
-            }
-            // Numbered lists: `1.` `2.` ... with a space after.
-            const nm = line.match(/^(\d+)\.\s+(.*)$/);
-            if (nm) {
-                out.push(wrap(seal, nm[1] + ". ") + styleInline(nm[2], ink));
-                continue;
-            }
-            out.push(styleInline(line, ink));
-        }
-        return out.join("<br>");
     }
 
     // ---------- Icon resolution ----------
@@ -850,7 +585,7 @@ Item {
         next = wrap ? ((next % n) + n) % n
                     : Math.max(0, Math.min(n - 1, next));
         root.selectedIndex = next;
-        resultList.positionViewAtIndex(next, ListView.Contain);
+        resultListInstance.list.positionViewAtIndex(next, ListView.Contain);
     }
 
     // Grid-aware step for Quick mode. `delta` may exceed ±1 (arrow Up/Down
@@ -999,10 +734,11 @@ Item {
                 // instead of the tile grid. Bodies return true from
                 // kbdHandle() to swallow the event; anything they leave
                 // unhandled (e.g. Esc) bubbles to the cascade below.
+                const bodyItem = quickContainer.bodyLoaderItem.item;
                 if (root.quickExpanded
-                    && bodyLoader.item
-                    && typeof bodyLoader.item.kbdHandle === "function"
-                    && bodyLoader.item.kbdHandle(e2)) {
+                    && bodyItem
+                    && typeof bodyItem.kbdHandle === "function"
+                    && bodyItem.kbdHandle(e2)) {
                     event.accepted = true;
                     return;
                 }
@@ -1049,7 +785,7 @@ Item {
                                || e2.key === Qt.Key_Tab || e2.key === Qt.Key_Backtab)) {
                     // chat mode: same scroll routing as tldr mode below.
                     // List nav is a no-op here (single synthetic row).
-                    const f = chatPreviewScroll;
+                    const f = previewPaneInstance.chatFlickable;
                     const max = Math.max(0, f.contentHeight - f.height);
                     const line = 18;
                     const page = Math.max(line, f.height * 0.9);
@@ -1074,7 +810,7 @@ Item {
                     // a no-op. Route arrow/page/home/end (and Tab/Shift+Tab,
                     // which would otherwise wrap the same row to itself) to
                     // the preview Flickable instead.
-                    const f = tldrPreviewScroll;
+                    const f = previewPaneInstance.tldrFlickable;
                     const max = Math.max(0, f.contentHeight - f.height);
                     const line = 18;
                     const page = Math.max(line, f.height * 0.9);
@@ -1110,11 +846,11 @@ Item {
                     event.accepted = true;
                 } else if (e2.key === Qt.Key_Home) {
                     root.selectedIndex = 0;
-                    resultList.positionViewAtIndex(0, ListView.Beginning);
+                    resultListInstance.list.positionViewAtIndex(0, ListView.Beginning);
                     event.accepted = true;
                 } else if (e2.key === Qt.Key_End) {
                     root.selectedIndex = Math.max(0, root.filteredItems.length - 1);
-                    resultList.positionViewAtIndex(root.selectedIndex, ListView.End);
+                    resultListInstance.list.positionViewAtIndex(root.selectedIndex, ListView.End);
                     event.accepted = true;
                 } else if (e2.key === Qt.Key_Return || e2.key === Qt.Key_Enter) {
                     if (root.quickMode) {
@@ -1155,12 +891,12 @@ Item {
                     // but it's what they asked for). With no selection,
                     // copy the full raw markdown from the hidden plain-
                     // text shadow so pasted commands keep their syntax.
-                    if (chatPreviewEdit.selectedText.length > 0) {
-                        chatPreviewEdit.copy();
+                    if (previewPaneInstance.chatEdit.selectedText.length > 0) {
+                        previewPaneInstance.chatEdit.copy();
                     } else {
-                        chatPlainShadow.selectAll();
-                        chatPlainShadow.copy();
-                        chatPlainShadow.deselect();
+                        previewPaneInstance.chatPlain.selectAll();
+                        previewPaneInstance.chatPlain.copy();
+                        previewPaneInstance.chatPlain.deselect();
                     }
                     event.accepted = true;
                 } else if (e2.key === Qt.Key_C && (e2.modifiers & Qt.ControlModifier)
@@ -1169,12 +905,12 @@ Item {
                     // there is one, otherwise copy the whole rendered
                     // preview. The TextEdit's `copy()` works without
                     // active focus, so the search input keeps keystrokes.
-                    if (tldrPreviewEdit.selectedText.length > 0) {
-                        tldrPreviewEdit.copy();
+                    if (previewPaneInstance.tldrEdit.selectedText.length > 0) {
+                        previewPaneInstance.tldrEdit.copy();
                     } else {
-                        tldrPreviewEdit.selectAll();
-                        tldrPreviewEdit.copy();
-                        tldrPreviewEdit.deselect();
+                        previewPaneInstance.tldrEdit.selectAll();
+                        previewPaneInstance.tldrEdit.copy();
+                        previewPaneInstance.tldrEdit.deselect();
                     }
                     event.accepted = true;
                 } else if (!root.quickMode && event.text && event.text.length === 1) {
@@ -1196,517 +932,22 @@ Item {
                 anchors.margins: 17
                 spacing: 12
 
-                Item {
-                    width: parent.width
-                    height: 43
-
-                    Column {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 2
-
-                        Text {
-                            text: root.categoryFilter === ""
-                                  ? "OMNI"
-                                  : "OMNI › " + root.sectionIcon + "  " + root.categoryFilter.toUpperCase()
-                            color: root.ink
-                            font.family: root.mono
-                            font.pixelSize: 19 * root.fontScale
-                            font.letterSpacing: 4
-                            font.weight: Font.Medium
-                        }
-                        Text {
-                            text: {
-                                if (!root.appsLoaded) return "LOADING APPS…";
-                                if (root.fileMode) {
-                                    if (root.query.length === 0) return "TYPE TO SEARCH ~";
-                                    if (root.fdRunning) return "SEARCHING…";
-                                    const total = root.filteredItems.length;
-                                    return total === 0
-                                        ? "NO FILES MATCH"
-                                        : total + " FILE" + (total === 1 ? "" : "S");
-                                }
-                                if (root.ghMode) {
-                                    const total = root.filteredItems.length;
-                                    if (root.query.length === 0) {
-                                        if (root.ghRunning && total === 0) return "LOADING PRS…";
-                                        return total === 0
-                                            ? "NO OPEN PRS"
-                                            : total + " OPEN PR" + (total === 1 ? "" : "S");
-                                    }
-                                    if (root.ghRunning) return "SEARCHING GITHUB…";
-                                    return total === 0
-                                        ? "NO REPOS MATCH"
-                                        : total + " REPO" + (total === 1 ? "" : "S");
-                                }
-                                if (root.favMode) {
-                                    const total = root.filteredItems.length;
-                                    return total === 0
-                                        ? "NO FAVOURITES YET  ·  CTRL+S TO STAR"
-                                        : total + " FAVOURITE" + (total === 1 ? "" : "S");
-                                }
-                                if (root.histMode) {
-                                    const total = root.filteredItems.length;
-                                    return total === 0
-                                        ? "NO HISTORY YET"
-                                        : total + " RECENT" + (total === 1 ? "" : "S");
-                                }
-                                if (root.procMode) {
-                                    const total = root.filteredItems.length;
-                                    if (processes.running && total === 0) return "LOADING PROCESSES…";
-                                    return total === 0
-                                        ? "NO PROCESSES"
-                                        : total + " PROCESS" + (total === 1 ? "" : "ES");
-                                }
-                                if (root.themeMode) {
-                                    const total = root.filteredItems.length;
-                                    if (!themes.loaded && total === 0) return "LOADING THEMES…";
-                                    return total === 0
-                                        ? "NO THEMES FOUND"
-                                        : total + " THEME" + (total === 1 ? "" : "S");
-                                }
-                                const total = root.filteredItems.length;
-                                if (root.query.length === 0) {
-                                    return total + " ENTRIES  ·  " + root.allItems.length + " TOTAL";
-                                }
-                                return total === 0
-                                    ? "NO MATCHES"
-                                    : total + " MATCH" + (total === 1 ? "" : "ES");
-                            }
-                            color: root.inkDeep
-                            font.family: root.mono
-                            font.pixelSize: 11 * root.fontScale
-                            font.letterSpacing: 2
-                        }
-                    }
-
-                    Text {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: {
-                            if (root.quickMode) {
-                                return root.quickExpanded
-                                    ? "HJKL / ↑↓←→  ·  TAB SECT  ·  ↵ APPLY  ·  ESC BACK"
-                                    : "HJKL / ↑↓←→  ·  ↵ OPEN  ·  ESC BACK";
-                            }
-                            if (root.categoryFilter === "")
-                                return "↑↓ / TAB  ·  ↵ OPEN  ·  ^S STAR  ·  ESC CLOSE";
-                            let verb = "RUN";
-                            if (root.fileMode)       verb = "OPEN FILE";
-                            else if (root.ghMode)    verb = "OPEN";
-                            else if (root.procMode)  verb = "KILL";
-                            else if (root.themeMode) verb = "APPLY";
-                            return "↑↓ / TAB  ·  ↵ " + verb + "  ·  ^S STAR  ·  ESC BACK";
-                        }
-                        color: root.inkDeep
-                        font.family: root.mono
-                        font.pixelSize: 10 * root.fontScale
-                        font.letterSpacing: 2
-                        opacity: 0.6
-                    }
+                Omni.HeaderBar {
+                    omni: root
+                    processes: processes
+                    themes: themes
+                    bookmarks: bookmarks
                 }
 
                 Rectangle { width: parent.width; height: 1; color: root.sep }
 
-                // ---------- Quick container (quickMode only) ----------
-                // Lays the tile grid on the left and the optional detail
-                // panel on the right when a tile is expanded, so the panel
-                // doesn't push the grid down or shove rows off the card.
-                Item {
+                Omni.QuickContainer {
                     id: quickContainer
-                    visible: root.quickMode
-                    width: parent.width
-                    height: visible
-                        ? Math.max(quickGrid.height,
-                                   detailPanel.visible ? detailPanel.height : 0)
-                        : 0
-
-                Item {
-                    id: quickGrid
-                    visible: root.quickMode
-                    // Expanded: compress to a narrow column on the left
-                    // edge so the detail panel gets the wider right half.
-                    readonly property bool colMode: root.quickExpanded
-                    anchors.top: parent.top
-                    anchors.left: parent.left
-                    width: colMode ? 64 : parent.width
-                    readonly property int tileH: colMode ? 42 : 86
-                    readonly property int spacing: colMode ? 4 : 10
-                    readonly property int rows: visible
-                        ? Math.ceil(root.filteredQuickTiles.length / root.quickGridCols)
-                        : 0
-                    height: visible
-                        ? (rows * tileH + Math.max(0, rows - 1) * spacing)
-                        : 0
-
-                    Grid {
-                        anchors.fill: parent
-                        columns: root.quickGridCols
-                        rowSpacing: quickGrid.spacing
-                        columnSpacing: quickGrid.spacing
-
-                        Repeater {
-                            model: root.filteredQuickTiles
-                            delegate: Item {
-                                id: tileSlot
-                                required property var modelData
-                                required property int index
-                                readonly property bool selected: root.selectedIndex === index
-                                width: (quickGrid.width - (root.quickGridCols - 1) * quickGrid.spacing)
-                                       / root.quickGridCols
-                                height: quickGrid.tileH
-
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: root.cornerRadius
-                                    color: tileSlot.selected
-                                           ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.08)
-                                           : tileMouse.containsMouse
-                                                ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.05)
-                                                : Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.03)
-                                    border.color: tileSlot.selected ? root.seal : root.sep
-                                    border.width: tileSlot.selected ? 2 : 1
-                                    Behavior on color        { ColorAnimation  { duration: 50 } }
-                                    Behavior on border.color { ColorAnimation  { duration: 50 } }
-                                    Behavior on border.width { NumberAnimation { duration: 50 } }
-                                }
-
-                                Column {
-                                    anchors.fill: parent
-                                    anchors.margins: quickGrid.colMode ? 3 : 8
-                                    spacing: quickGrid.colMode ? 0 : 3
-
-                                    Text {
-                                        readonly property var dyn: root.tileDyn(tileSlot.modelData)
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        text: dyn.glyph || ""
-                                        color: dyn.tone || root.ink
-                                        font.family: root.mono
-                                        font.pixelSize: (quickGrid.colMode ? 14 : 20) * root.fontScale
-                                    }
-                                    Text {
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: parent.width
-                                        horizontalAlignment: Text.AlignHCenter
-                                        elide: Text.ElideRight
-                                        text: root.tileDyn(tileSlot.modelData).label || ""
-                                        color: root.ink
-                                        font.family: root.mono
-                                        font.pixelSize: (quickGrid.colMode ? 7 : 9) * root.fontScale
-                                        font.letterSpacing: quickGrid.colMode ? 0.8 : 1.4
-                                        font.weight: Font.Medium
-                                    }
-                                    // Sub-label is redundant in colMode —
-                                    // the detail panel header above shows
-                                    // the same live value. Hiding it lets
-                                    // the column fit all 12 tiles inside
-                                    // the card's vertical budget.
-                                    Text {
-                                        visible: !quickGrid.colMode
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: parent.width
-                                        horizontalAlignment: Text.AlignHCenter
-                                        elide: Text.ElideRight
-                                        text: root.tileDyn(tileSlot.modelData).sub || ""
-                                        color: root.inkDeep
-                                        font.family: root.mono
-                                        font.pixelSize: 8 * root.fontScale
-                                        font.letterSpacing: 1
-                                        opacity: 0.85
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: tileMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    onPositionChanged: root.selectedIndex = tileSlot.index
-                                    onClicked: (e) => {
-                                        root.selectedIndex = tileSlot.index;
-                                        if (e.button === Qt.RightButton) {
-                                            // Right-click still runs the long action
-                                            // (mute toggle, refresh, reset) without
-                                            // opening the detail panel.
-                                            root.longQuickTile(tileSlot.modelData);
-                                        } else {
-                                            root.expandTile(tileSlot.modelData);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    omni: root
+                    panel: panel
                 }
 
-                // Vertical separator between the compressed tile column
-                // (left) and the detail panel (right). Anchored to the
-                // grid's right edge so it tracks the column's width.
-                Rectangle {
-                    id: quickMidSep
-                    visible: root.quickExpanded
-                    anchors.left: quickGrid.right
-                    anchors.leftMargin: 16
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: 1
-                    color: root.sep
-                }
-
-                // ---------- Quick tile detail panel ----------
-                // Drops below the tile grid when a tile is clicked. Each
-                // tile gets a small adjustment surface here — sliders for
-                // audio + display, action buttons for everything else.
-                // The whole panel collapses to height 0 when no tile is
-                // expanded so the card auto-shrinks back to its grid-only
-                // footprint.
-                Item {
-                    id: detailPanel
-                    visible: root.quickExpanded
-                    anchors.left: quickMidSep.right
-                    anchors.leftMargin: 16
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    // Cap the panel so the card never extends past its
-                    // budget. Body content beyond this height scrolls
-                    // inside `bodyScroll` below instead of pushing the
-                    // card off-screen.
-                    readonly property real _maxHeight: panel.height * 0.55
-                    readonly property real _wantHeight: detailHeader.implicitHeight + bodyLoader.implicitContentHeight + 18
-                    height: visible ? Math.min(_wantHeight, _maxHeight) : 0
-                    clip: true
-                    Behavior on height {
-                        NumberAnimation { duration: 60; easing.type: Easing.OutCubic }
-                    }
-
-                    readonly property var t: root.expandedTile
-                    readonly property string tKey: t ? t.key : ""
-                    // Capture the OmniMenu root under a non-conflicting
-                    // name. Inside the Component children below, an
-                    // expression like `root: root` would self-bind to the
-                    // body's own `root` property (still undefined at the
-                    // moment of evaluation) rather than reach the outer
-                    // id. `omni` lets us reference the OmniMenu root
-                    // unambiguously from within those Component templates.
-                    readonly property var omni: root
-
-                    // Per-tile body Components — instantiated by the
-                    // Loader below based on `tKey`. Each body owns its
-                    // own controls (sliders, lists) and may emit `close`
-                    // to dismiss OmniMenu after an action that takes
-                    // focus away.
-                    Component { id: batteryBodyComp;     QuickBatteryBody     { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: audioBodyComp;       QuickAudioBody       { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: wifiBodyComp;        QuickWifiBody        { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: btBodyComp;          QuickBluetoothBody   { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: weatherBodyComp;     QuickWeatherBody     { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: displayBodyComp;     QuickDisplayBody     { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: aetherBodyComp;      QuickAetherBody      { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: cpuBodyComp;         QuickCpuBody         { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: calendarBodyComp;    QuickCalendarBody    { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: screenshotsBodyComp; QuickScreenshotsBody { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: videosBodyComp;      QuickVideosBody      { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-                    Component { id: powerBodyComp;       QuickPowerBody       { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-
-                    // Header (always visible at the top of the panel)
-                    RowLayout {
-                        id: detailHeader
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.topMargin: 6
-                        spacing: 12
-                        Text {
-                            readonly property var dyn: root.tileDyn(detailPanel.t)
-                            text: dyn.glyph || ""
-                            color: dyn.tone || root.ink
-                            font.family: root.mono
-                            font.pixelSize: 26 * root.fontScale
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-                        Column {
-                            Layout.fillWidth: true
-                            Layout.alignment: Qt.AlignVCenter
-                            spacing: 2
-                            Text {
-                                text: root.tileDyn(detailPanel.t).label || ""
-                                color: root.ink
-                                font.family: root.mono
-                                font.pixelSize: 13 * root.fontScale
-                                font.letterSpacing: 2
-                                font.weight: Font.Medium
-                            }
-                            Text {
-                                text: root.tileDyn(detailPanel.t).sub || ""
-                                color: root.inkDeep
-                                font.family: root.mono
-                                font.pixelSize: 10 * root.fontScale
-                                font.letterSpacing: 1
-                                opacity: 0.85
-                            }
-                        }
-                        Rectangle {
-                            Layout.alignment: Qt.AlignVCenter
-                            width: 22; height: 22; radius: 11
-                            color: closeMouse.containsMouse
-                                   ? Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.08)
-                                   : "transparent"
-                            border.color: root.sep
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: "×"
-                                color: root.inkDeep
-                                font.family: root.mono
-                                font.pixelSize: 14 * root.fontScale
-                            }
-                            MouseArea {
-                                id: closeMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.collapseTile()
-                            }
-                        }
-                    }
-
-                    // Scrollable body region: takes whatever vertical
-                    // space is left after the header. When the body
-                    // content exceeds the available space the user can
-                    // flick / scroll inside this clipped region instead
-                    // of having content fall off the card.
-                    Flickable {
-                        id: bodyScroll
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: detailHeader.bottom
-                        anchors.bottom: parent.bottom
-                        anchors.topMargin: 10
-                        contentWidth: width
-                        contentHeight: bodyLoader.implicitContentHeight
-                        clip: true
-                        boundsBehavior: Flickable.StopAtBounds
-                        interactive: contentHeight > height
-
-                        Loader {
-                            id: bodyLoader
-                            width: bodyScroll.width
-                            active: detailPanel.visible
-                            // Exposed so detailPanel.height can clamp to
-                            // panel-budget while still picking the
-                            // shorter of "content" / "available".
-                            readonly property real implicitContentHeight: item ? item.implicitHeight : 0
-                            sourceComponent: {
-                                switch (detailPanel.tKey) {
-                                    case "battery":     return batteryBodyComp;
-                                    case "audio":       return audioBodyComp;
-                                    case "network":     return wifiBodyComp;
-                                    case "bluetooth":   return btBodyComp;
-                                    case "weather":     return weatherBodyComp;
-                                    case "display":     return displayBodyComp;
-                                    case "aether":      return aetherBodyComp;
-                                    case "cpu":         return cpuBodyComp;
-                                    case "calendar":    return calendarBodyComp;
-                                    case "screenshots": return screenshotsBodyComp;
-                                    case "videos":      return videosBodyComp;
-                                    case "power":       return powerBodyComp;
-                                }
-                                return null;
-                            }
-                            onLoaded: {
-                                if (item && item.close)
-                                    item.close.connect(function() { root.close(); });
-                                bodyScroll.contentY = 0;
-                            }
-                        }
-
-                        // Slim scroll indicator on the right edge — only
-                        // visible while overflow exists. Tracks the
-                        // viewport position so the user has a hint that
-                        // more content is below.
-                        Rectangle {
-                            visible: bodyScroll.contentHeight > bodyScroll.height
-                            anchors.right: parent.right
-                            anchors.rightMargin: 2
-                            width: 3
-                            radius: 1.5
-                            color: root.seal
-                            opacity: 0.55
-                            y: bodyScroll.contentHeight > 0
-                               ? (bodyScroll.contentY / bodyScroll.contentHeight) * bodyScroll.height
-                               : 0
-                            height: bodyScroll.contentHeight > 0
-                                    ? Math.max(20, (bodyScroll.height / bodyScroll.contentHeight) * bodyScroll.height)
-                                    : 0
-                        }
-                    }
-                }
-
-                } // end of quickContainer
-
-                // No focus indicator on TextInput — the caret and the
-                // live count above act as the focus tell. Hidden entirely
-                // in quickMode where the tile grid is the only surface
-                // the user interacts with (filtering removed per UX call).
-                Item {
-                    visible: !root.quickMode
-                    width: parent.width
-                    height: visible ? 34 : 0
-
-                    Text {
-                        id: searchPrompt
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: root.fileMode ? "󰉖"
-                              : root.ghMode ? "󰊤"
-                              : root.procMode ? "󰍛"
-                              : root.themeMode ? "󰸌"
-                              : "󰍉"
-                        color: root.seal
-                        font.family: root.mono
-                        font.pixelSize: 16 * root.fontScale
-                    }
-
-                    Text {
-                        id: queryText
-                        anchors.left: searchPrompt.right
-                        anchors.leftMargin: 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: {
-                            if (root.query.length > 0) return root.query;
-                            if (root.fileMode)  return "Type to search files in ~ …";
-                            if (root.ghMode)    return "Your PRs · type to search GitHub repos";
-                            if (root.procMode)  return "Type to filter processes by name, user, pid…";
-                            if (root.themeMode) return "Type to filter themes…";
-                            return "Type to search apps, themes, settings…";
-                        }
-                        color: root.query.length === 0 ? root.inkDeep : root.ink
-                        opacity: root.query.length === 0 ? 0.5 : 1.0
-                        font.family: root.mono
-                        font.pixelSize: 14 * root.fontScale
-                        font.letterSpacing: 1
-                    }
-
-                    // Blinking caret riding the end of the query.
-                    Rectangle {
-                        id: caret
-                        width: 2
-                        height: 16
-                        color: root.seal
-                        anchors.verticalCenter: parent.verticalCenter
-                        x: root.query.length === 0
-                           ? searchPrompt.x + searchPrompt.width + 10
-                           : queryText.x + queryText.contentWidth + 2
-                        visible: root.visible_
-                        SequentialAnimation on opacity {
-                            running: root.visible_
-                            loops: Animation.Infinite
-                            NumberAnimation { from: 1; to: 0.2; duration: 600; easing.type: Easing.InOutSine }
-                            NumberAnimation { from: 0.2; to: 1; duration: 600; easing.type: Easing.InOutSine }
-                        }
-                    }
-                }
+                Omni.SearchInput { omni: root }
 
                 Rectangle {
                     visible: !root.quickMode
@@ -1735,8 +976,8 @@ Item {
                     // smooth widen-and-split motion.
                     readonly property real listFraction: root.previewActive ? 0.44 : 1.0
 
-                    ListView {
-                        id: resultList
+                    Omni.ResultList {
+                        id: resultListInstance
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         anchors.left: parent.left
@@ -1744,656 +985,38 @@ Item {
                         // second Behavior here would animate to a moving
                         // target and produce staggered motion.
                         width: parent.width * listArea.listFraction
-                        model: root.filteredItems
-                        currentIndex: root.selectedIndex
-                        highlightFollowsCurrentItem: false
-                        boundsBehavior: Flickable.StopAtBounds
-                        cacheBuffer: 200
-                        // Snap pixel-perfect so the row outline doesn't
-                        // shimmer during arrow-key scroll.
-                        pixelAligned: true
-
-                        delegate: Item {
-                            id: row
-                            required property var modelData
-                            required property int index
-                            width: ListView.view.width
-                            height: 38
-                            readonly property bool isSelected: root.selectedIndex === index
-
-                            Rectangle {
-                                anchors.fill: parent
-                                color: row.isSelected ? root.rowSel
-                                                       : rowMouse.containsMouse ? root.rowHi
-                                                                                : "transparent"
-                                Behavior on color { ColorAnimation { duration: 40 } }
-                            }
-                            Rectangle {
-                                anchors.left: parent.left
-                                anchors.top: parent.top
-                                anchors.bottom: parent.bottom
-                                width: 2
-                                color: root.seal
-                                visible: row.isSelected
-                            }
-
-                            // Icon slot: tinted .desktop image when one
-                            // resolves, nerd-font glyph fallback otherwise.
-                            // hasImageIcon flips on Image.Ready so the swap
-                            // happens in one frame, no broken-icon flash.
-                            Item {
-                                id: iconText
-                                anchors.left: parent.left
-                                anchors.leftMargin: 14
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: 22
-                                height: 22
-
-                                readonly property string iconUrl: root.resolveIconUrl(row.modelData.rawIcon)
-                                readonly property bool hasImageIcon: appImg.status === Image.Ready && iconUrl !== ""
-                                readonly property color tint: row.isSelected ? root.seal : root.inkDeep
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    visible: !iconText.hasImageIcon
-                                    text: row.modelData.icon || "·"
-                                    color: iconText.tint
-                                    font.family: root.mono
-                                    font.pixelSize: 16 * root.fontScale
-                                }
-
-                                // Hidden because MultiEffect draws the
-                                // recoloured copy; layer.enabled hands it
-                                // a texture to sample without committing a
-                                // full FBO until an icon actually resolves.
-                                Image {
-                                    id: appImg
-                                    anchors.centerIn: parent
-                                    width: 18
-                                    height: 18
-                                    visible: false
-                                    source: iconText.iconUrl
-                                    sourceSize.width: 36
-                                    sourceSize.height: 36
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    asynchronous: true
-                                    cache: true
-                                    layer.enabled: iconText.hasImageIcon
-                                }
-                                // colorization: 1.0 paints solid colour
-                                // through the source's alpha — a flat
-                                // tinted silhouette in the ink/seal palette.
-                                MultiEffect {
-                                    anchors.fill: appImg
-                                    visible: iconText.hasImageIcon
-                                    source: appImg
-                                    colorization: 1.0
-                                    colorizationColor: iconText.tint
-                                    Behavior on colorizationColor { ColorAnimation { duration: 40 } }
-                                }
-                            }
-                            Text {
-                                id: titleText
-                                anchors.left: iconText.right
-                                anchors.leftMargin: 12
-                                anchors.verticalCenter: parent.verticalCenter
-                                // Trailing chevron flags drill-in rows so
-                                // you can tell at a glance which Enters
-                                // drill in vs. which Enters execute.
-                                text: row.modelData.isCategory
-                                      ? row.modelData.title + "  ›"
-                                      : row.modelData.title
-                                color: row.isSelected ? root.ink : root.fg
-                                font.family: root.mono
-                                font.pixelSize: 13 * root.fontScale
-                                font.weight: row.isSelected ? Font.Medium : Font.Light
-                                font.letterSpacing: 1
-                                elide: Text.ElideRight
-                                width: row.width - iconText.width - catText.implicitWidth - 60
-                            }
-                            Text {
-                                id: starText
-                                anchors.right: catText.left
-                                anchors.rightMargin: 8
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: bookmarks.isFavourite(row.modelData)
-                                text: "󰓎"
-                                color: root.seal
-                                font.family: root.mono
-                                font.pixelSize: 11 * root.fontScale
-                            }
-                            Text {
-                                id: catText
-                                anchors.right: parent.right
-                                anchors.rightMargin: 14
-                                anchors.verticalCenter: parent.verticalCenter
-                                // File rows show the dirname here, which
-                                // shouldn't be uppercased or letter-spaced.
-                                // Cap the width so a deep path doesn't push
-                                // the title text off the row.
-                                text: row.modelData.rawCategory
-                                      ? (row.modelData.category || "")
-                                      : (row.modelData.category || "").toUpperCase()
-                                color: row.isSelected ? root.seal : root.inkDeep
-                                opacity: row.isSelected ? 0.95 : 0.65
-                                font.family: root.mono
-                                font.pixelSize: 10 * root.fontScale
-                                font.letterSpacing: row.modelData.rawCategory ? 0 : 2
-                                elide: Text.ElideLeft
-                                horizontalAlignment: Text.AlignRight
-                                width: row.modelData.rawCategory
-                                       ? Math.min(implicitWidth, row.width * 0.45)
-                                       : implicitWidth
-                            }
-
-                            MouseArea {
-                                id: rowMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                // onPositionChanged fires only on actual
-                                // cursor movement; onEntered would also
-                                // fire when rows shift under a stationary
-                                // cursor (after a query change, drill-in,
-                                // or rescore), stealing keyboard focus.
-                                onPositionChanged: root.selectedIndex = row.index
-                                onClicked: root.activate(row.modelData)
-                            }
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            visible: resultList.count === 0
-                            text: {
-                                if (root.tldrMode) {
-                                    if (root.tldrTool.length === 0) return "$ COMMAND  ·  TLDR PREVIEW";
-                                    if (root.tldrRunning) return "FETCHING TLDR…";
-                                    return "NO TLDR PAGE";
-                                }
-                                if (root.chatMode) {
-                                    if (root.chatPrompt.length === 0) return "? QUESTION  ·  LOCAL AI";
-                                    if (root.chatStatus === "")    return "CHECKING OLLAMA…";
-                                    if (root.chatStatus !== "ok")  return "OLLAMA SETUP NEEDED";
-                                    if (!root.chatSubmitted)        return "↵ TO ASK";
-                                    if (root.chatRunning)           return "STREAMING…";
-                                    return "READY  ·  EDIT TO ASK AGAIN";
-                                }
-                                if (root.fileMode) {
-                                    if (root.query.length === 0) return "TYPE TO SEARCH ~";
-                                    if (root.fdRunning) return "SEARCHING…";
-                                    return "NO FILES MATCH";
-                                }
-                                if (root.ghMode) {
-                                    if (root.query.length === 0) {
-                                        return root.ghRunning ? "LOADING PRS…" : "NO OPEN PRS";
-                                    }
-                                    if (root.ghRunning) return "SEARCHING GITHUB…";
-                                    return "NO REPOS MATCH";
-                                }
-                                if (root.favMode)  return "NO FAVOURITES — CTRL+S TO STAR";
-                                if (root.histMode) return "NO HISTORY YET";
-                                if (root.procMode)  return processes.running ? "LOADING…" : "NO PROCESSES";
-                                if (root.themeMode) return themes.loaded ? "NO THEMES MATCH" : "LOADING THEMES…";
-                                return root.appsLoaded ? "NOTHING MATCHES" : "INDEXING APPS…";
-                            }
-                            color: root.inkDeep
-                            font.family: root.mono
-                            font.pixelSize: 11 * root.fontScale
-                            font.letterSpacing: 3
-                            opacity: 0.6
-                        }
+                        omni: root
+                        bookmarks: bookmarks
+                        processes: processes
+                        themes: themes
+                        ollamaChat: ollamaChat
                     }
 
-                    // ---------- Preview pane ----------
                     Rectangle {
                         visible: root.previewActive
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
-                        anchors.left: resultList.right
+                        anchors.left: resultListInstance.right
                         width: 1
                         color: root.sep
                     }
 
-                    Item {
-                        id: previewPane
+                    Omni.PreviewPane {
+                        id: previewPaneInstance
                         visible: root.previewActive
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
-                        anchors.left: resultList.right
+                        anchors.left: resultListInstance.right
                         anchors.leftMargin: 13
                         anchors.right: parent.right
-
-                        Text {
-                            id: previewName
-                            anchors.top: parent.top
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            text: {
-                                const it = root.filteredItems[root.selectedIndex];
-                                if (root.tldrMode) return root.tldrTool;
-                                if (root.chatMode) return root.chatModel;
-                                if (root.ghMode) return root.previewRepo;
-                                if (root.procMode) return it ? it.title : "";
-                                if (root.themeMode) return it ? it.title : "";
-                                return root.previewPath ? Data.basename(root.previewPath) : "";
-                            }
-                            color: root.ink
-                            font.family: root.mono
-                            font.pixelSize: 13 * root.fontScale
-                            font.weight: Font.Medium
-                            font.letterSpacing: 1
-                            wrapMode: Text.WrapAnywhere
-                            maximumLineCount: 2
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            id: previewDir
-                            anchors.top: previewName.bottom
-                            anchors.topMargin: 2
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            text: {
-                                const it = root.filteredItems[root.selectedIndex];
-                                if (root.tldrMode) return root.tldrTool.length === 0
-                                    ? "type a command name after $"
-                                    : "tldr  ·  ↵ opens terminal with command ready";
-                                if (root.chatMode) {
-                                    if (root.chatPrompt.length === 0) return "type a question after ?";
-                                    if (root.chatStatus === "")    return "probing local ollama…";
-                                    if (root.chatStatus === "no-ollama") return "install ollama first";
-                                    if (root.chatStatus === "no-daemon") return "↵ to start the ollama daemon";
-                                    if (root.chatStatus === "no-model")  return "↵ to pull " + root.chatModel + " (~2 GB)";
-                                    if (!root.chatSubmitted)        return "↵ to ask  ·  local, offline";
-                                    if (root.chatRunning)           return "streaming  ·  edit to ask again";
-                                    return "↵ done  ·  edit prompt and ↵ to ask again";
-                                }
-                                if (root.ghMode) return root.previewRepoUrl;
-                                if (root.procMode) return it ? ("pid " + (it.pid || "") + "  ·  ↵ kills (SIGTERM)") : "";
-                                if (root.themeMode) return it
-                                    ? (it.isActive ? "ACTIVE  ·  ↵ reapplies" : "↵ applies theme")
-                                    : "";
-                                return root.previewPath ? Data.tildify(Data.dirname(root.previewPath), root.homeDir) : "";
-                            }
-                            color: root.inkDeep
-                            font.family: root.mono
-                            font.pixelSize: 10 * root.fontScale
-                            font.letterSpacing: 1
-                            elide: Text.ElideLeft
-                            opacity: 0.75
-                        }
-                        Rectangle {
-                            id: previewSep
-                            anchors.top: previewDir.bottom
-                            anchors.topMargin: 8
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            height: 1
-                            color: root.sep
-                            visible: root.previewHasContent
-                        }
-
-                        Item {
-                            id: previewBody
-                            anchors.top: previewSep.bottom
-                            anchors.topMargin: 10
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            clip: true
-
-                            Text {
-                                anchors.centerIn: parent
-                                visible: !root.previewHasContent
-                                text: {
-                                    if (root.tldrMode) {
-                                        if (root.tldrTool.length === 0) return "TYPE A COMMAND";
-                                        return root.tldrRunning ? "FETCHING…" : "NO TLDR PAGE";
-                                    }
-                                    if (root.chatMode) {
-                                        if (root.chatPrompt.length === 0) return "TYPE A QUESTION";
-                                        if (root.chatStatus === "") return "CHECKING…";
-                                        if (!root.chatSubmitted) return "PRESS ENTER TO ASK";
-                                        return root.chatRunning ? "STREAMING…" : "DONE";
-                                    }
-                                    if (root.ghMode)    return "SELECT A REPO";
-                                    if (root.procMode)  return "SELECT A PROCESS";
-                                    if (root.themeMode) return "SELECT A THEME";
-                                    return root.query.length === 0 ? "PREVIEW APPEARS HERE" : "SELECT A FILE";
-                                }
-                                color: root.inkDeep
-                                font.family: root.mono
-                                font.pixelSize: 10 * root.fontScale
-                                font.letterSpacing: 3
-                                opacity: 0.5
-                            }
-
-                            // sourceSize caps decode memory so a 6000x4000
-                            // photo doesn't allocate its full pixel buffer
-                            // just to render at ~500px.
-                            Image {
-                                anchors.fill: parent
-                                anchors.margins: 4
-                                visible: root.previewKind === "image"
-                                source: root.previewKind === "image"
-                                        ? "file://" + root.previewPath
-                                        : ""
-                                sourceSize.width: 1024
-                                sourceSize.height: 1024
-                                fillMode: Image.PreserveAspectFit
-                                asynchronous: true
-                                smooth: true
-                            }
-
-                            Text {
-                                anchors.fill: parent
-                                visible: root.previewKind === "text"
-                                text: root.previewText
-                                color: root.ink
-                                font.family: root.mono
-                                font.pixelSize: 10 * root.fontScale
-                                lineHeight: 1.3
-                                wrapMode: Text.Wrap
-                                textFormat: Text.PlainText
-                                elide: Text.ElideRight
-                                maximumLineCount: Math.max(1, Math.floor(previewBody.height / 13))
-                            }
-
-                            Text {
-                                anchors.fill: parent
-                                visible: root.previewKind === "meta"
-                                text: root.previewMeta
-                                color: root.inkDeep
-                                font.family: root.mono
-                                font.pixelSize: 11 * root.fontScale
-                                lineHeight: 1.4
-                                wrapMode: Text.WordWrap
-                                textFormat: Text.PlainText
-                            }
-
-                            // Wheel-scrollable preview. `interactive: false`
-                            // disables Flickable's own drag-to-scroll so the
-                            // inner TextEdit's drag-to-select wins; wheel
-                            // events still scroll via Flickable's separate
-                            // wheel handling. contentY resets to 0 whenever
-                            // the tldr text changes so a fresh fetch always
-                            // starts at the top.
-                            Flickable {
-                                id: tldrPreviewScroll
-                                anchors.fill: parent
-                                visible: root.tldrMode && root.tldrPreview !== ""
-                                contentWidth: width
-                                contentHeight: tldrPreviewEdit.implicitHeight
-                                clip: true
-                                interactive: false
-                                boundsBehavior: Flickable.StopAtBounds
-
-                                Connections {
-                                    target: root
-                                    function onTldrPreviewChanged() { tldrPreviewScroll.contentY = 0; }
-                                }
-
-                                // Mouse wheel scroll. Flickable's built-in
-                                // wheel handling is gated by `interactive`,
-                                // which we keep false so TextEdit can own
-                                // drag-to-select. A WheelHandler bypasses
-                                // that gate, scrolling contentY directly.
-                                WheelHandler {
-                                    onWheel: (event) => {
-                                        const f = tldrPreviewScroll;
-                                        const max = Math.max(0, f.contentHeight - f.height);
-                                        f.contentY = Math.max(0, Math.min(max,
-                                            f.contentY - event.angleDelta.y * 0.5));
-                                    }
-                                }
-
-                                // TextEdit (not Text) so the user can mouse-
-                                // drag to select and copy. activeFocusOnPress
-                                // false means clicking in the preview doesn't
-                                // steal keystrokes from the search input;
-                                // selection still tracks the mouse and Ctrl+C
-                                // at the root key handler copies via the
-                                // edit's copy() method. persistentSelection
-                                // keeps the highlight visible while focus
-                                // stays on the search input.
-                                TextEdit {
-                                    id: tldrPreviewEdit
-                                    width: tldrPreviewScroll.width
-                                    text: root.formatTldrHtml(root.tldrPreview)
-                                    color: root.ink
-                                    font.family: root.mono
-                                    font.pixelSize: 13 * root.fontScale
-                                    wrapMode: TextEdit.Wrap
-                                    textFormat: TextEdit.RichText
-                                    readOnly: true
-                                    selectByMouse: true
-                                    persistentSelection: true
-                                    activeFocusOnPress: false
-                                    selectionColor: root.indigo
-                                    selectedTextColor: root.paper
-                                }
-                            }
-
-                            // Chat preview — same scroll/select/copy
-                            // shape as the tldr one above. Shows the
-                            // setup hint text when status is not "ok",
-                            // otherwise shows the streamed response.
-                            // Auto-scrolls to the bottom while running
-                            // so the user sees the latest tokens.
-                            Flickable {
-                                id: chatPreviewScroll
-                                anchors.fill: parent
-                                visible: root.chatMode && root.previewHasContent
-                                contentWidth: width
-                                contentHeight: chatPreviewEdit.implicitHeight
-                                clip: true
-                                interactive: false
-                                boundsBehavior: Flickable.StopAtBounds
-
-                                Connections {
-                                    target: root
-                                    function onChatPreviewChanged() {
-                                        if (root.chatRunning) {
-                                            const max = Math.max(0, chatPreviewScroll.contentHeight - chatPreviewScroll.height);
-                                            chatPreviewScroll.contentY = max;
-                                        }
-                                    }
-                                }
-                                // Reset scroll only on *new submissions*
-                                // — listening to the signal (not the
-                                // submitted property) avoids resetting
-                                // when prompt-edit flips submitted false,
-                                // which would slam contentY=0 mid-read.
-                                Connections {
-                                    target: ollamaChat
-                                    function onPromptSubmitted() {
-                                        chatPreviewScroll.contentY = 0;
-                                    }
-                                }
-
-                                WheelHandler {
-                                    onWheel: (event) => {
-                                        const f = chatPreviewScroll;
-                                        const max = Math.max(0, f.contentHeight - f.height);
-                                        f.contentY = Math.max(0, Math.min(max,
-                                            f.contentY - event.angleDelta.y * 0.5));
-                                    }
-                                }
-
-                                // Hidden plain-text mirror of chatPreview.
-                                // Used by Ctrl+C (no-selection path) to put
-                                // the raw markdown on the clipboard with
-                                // backticks and bullet hyphens preserved —
-                                // Qt's RichText→plain conversion strips
-                                // those when copy()ing from chatPreviewEdit.
-                                TextEdit {
-                                    id: chatPlainShadow
-                                    visible: false
-                                    width: 0
-                                    height: 0
-                                    text: root.chatPreview
-                                    textFormat: TextEdit.PlainText
-                                    readOnly: true
-                                }
-                                TextEdit {
-                                    id: chatPreviewEdit
-                                    width: chatPreviewScroll.width
-                                    // Status messages get dimmed via the
-                                    // baseColor arg; live response uses
-                                    // the default ink. formatChatHtml
-                                    // escapes HTML and converts newlines
-                                    // to <br> so plain status text is
-                                    // safe under RichText too.
-                                    text: {
-                                        if (root.chatStatus === "no-ollama")
-                                            return root.formatChatHtml(
-                                                "Ollama is not installed.\n\n"
-                                              + "Install it from your package manager:\n"
-                                              + "  `yay -S ollama`\n"
-                                              + "  `sudo systemctl enable --now ollama`\n"
-                                              + "  `ollama pull " + root.chatModel + "`\n\n"
-                                              + "Then return here and try again.", root.inkDeep);
-                                        if (root.chatStatus === "no-daemon")
-                                            return root.formatChatHtml(
-                                                "Ollama is installed but the daemon is not responding.\n\n"
-                                              + "Press Enter to start it in a terminal. "
-                                              + "You can close the terminal once you see the daemon is up.", root.inkDeep);
-                                        if (root.chatStatus === "no-model")
-                                            return root.formatChatHtml(
-                                                "Model `" + root.chatModel + "` is not pulled yet (~2 GB).\n\n"
-                                              + "Press Enter to fetch it. This is a one-time download; "
-                                              + "the weights live at `~/.ollama/models/`.", root.inkDeep);
-                                        return root.formatChatHtml(root.chatPreview, null);
-                                    }
-                                    color: root.ink
-                                    font.family: root.mono
-                                    font.pixelSize: 13 * root.fontScale
-                                    wrapMode: TextEdit.Wrap
-                                    textFormat: TextEdit.RichText
-                                    readOnly: true
-                                    selectByMouse: true
-                                    persistentSelection: true
-                                    activeFocusOnPress: false
-                                    selectionColor: root.indigo
-                                    selectedTextColor: root.paper
-                                }
-                            }
-
-                            Text {
-                                anchors.fill: parent
-                                visible: root.ghMode && root.previewRepoUrl !== ""
-                                text: root.previewReadme
-                                color: root.ink
-                                font.family: root.mono
-                                font.pixelSize: 10 * root.fontScale
-                                lineHeight: 1.3
-                                wrapMode: Text.Wrap
-                                textFormat: Text.PlainText
-                                elide: Text.ElideRight
-                                maximumLineCount: Math.max(1, Math.floor(previewBody.height / 13))
-                            }
-
-                            // Process detail (cmdline + ps stats).
-                            Text {
-                                anchors.fill: parent
-                                visible: root.procMode && root.procPreviewText !== ""
-                                text: root.procPreviewText
-                                color: root.ink
-                                font.family: root.mono
-                                font.pixelSize: 10 * root.fontScale
-                                lineHeight: 1.4
-                                wrapMode: Text.Wrap
-                                textFormat: Text.PlainText
-                            }
-
-                            // Theme preview image: themes ship a
-                            // preview.png (lock screen sample) or, when
-                            // absent, fall back to the first file in the
-                            // backgrounds/ subdir. Themes.qml resolves
-                            // the path; missing themes get "" and the
-                            // image stays invisible so the swatches
-                            // below take the whole pane.
-                            Image {
-                                id: themeImg
-                                anchors.top: parent.top
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                visible: root.themeMode && status === Image.Ready
-                                height: visible ? Math.min(implicitHeight, previewBody.height * 0.6) : 0
-                                source: {
-                                    if (!root.themeMode) return "";
-                                    const it = root.filteredItems[root.selectedIndex];
-                                    return (it && it.previewImage) ? "file://" + it.previewImage : "";
-                                }
-                                fillMode: Image.PreserveAspectFit
-                                sourceSize.width: 1024
-                                sourceSize.height: 1024
-                                asynchronous: true
-                                smooth: true
-                                cache: true
-                            }
-
-                            // Theme swatch grid. Each swatch is a 30x30
-                            // tile coloured from the theme's colors.toml;
-                            // Flow lets them reflow if the preview pane
-                            // is narrowed. Sits under the preview image
-                            // when one resolves, otherwise pinned to the
-                            // top of the pane.
-                            Flow {
-                                anchors.top: themeImg.visible ? themeImg.bottom : parent.top
-                                anchors.topMargin: themeImg.visible ? 10 : 0
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                visible: root.themeMode
-                                spacing: 6
-                                Repeater {
-                                    model: {
-                                        const it = root.filteredItems[root.selectedIndex];
-                                        return (it && it.swatches) ? it.swatches : [];
-                                    }
-                                    delegate: Rectangle {
-                                        required property string modelData
-                                        width: 30
-                                        height: 30
-                                        radius: 2
-                                        color: modelData
-                                        border.width: 1
-                                        border.color: root.sep
-                                    }
-                                }
-                            }
-                        }
+                        omni: root
+                        ollamaChat: ollamaChat
                     }
                 }
 
                 Rectangle { width: parent.width; height: 1; color: root.sep }
 
-                // Footer surfaces the exec line of the current selection so
-                // you can verify what's about to fire before pressing Enter.
-                Item {
-                    width: parent.width
-                    height: 22
-
-                    Text {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 4
-                        elide: Text.ElideRight
-                        text: {
-                            const it = root.filteredItems[root.selectedIndex];
-                            if (!it) return "";
-                            if (it.isCategory)  return "→ open " + it.target.toLowerCase();
-                            if (it.isProcess)   return "↵ kill " + (it.pid || "");
-                            if (it.isTheme)     return "↵ omarchy-theme-set " + (it.themeName || "");
-                            return "$ " + it.exec;
-                        }
-                        color: root.inkDeep
-                        font.family: root.mono
-                        font.pixelSize: 10 * root.fontScale
-                        font.letterSpacing: 1
-                        opacity: 0.65
-                    }
-                }
+                Omni.Footer { omni: root }
             }
         }
     }

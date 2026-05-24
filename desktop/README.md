@@ -22,16 +22,21 @@ qs -n -d -c desktop
 
 Reload the Hyprland session (or run `omarchy-hook post-boot`) and the bar appears with the palette one keybind away.
 
-## Hyprland keybinds
+## Surfaces
 
-```
-bind = SUPER, SPACE, exec, qs -c desktop ipc call palette toggle
-bind = SUPER, P,     exec, qs -c desktop ipc call screenshots toggle
-bind = SUPER, V,     exec, qs -c desktop ipc call videos toggle
-bind = SUPER, D,     exec, qs -c desktop ipc call display toggle
-bind = SUPER, W,     exec, qs -c desktop ipc call weather toggle
-bind = SUPER, A,     exec, qs -c desktop ipc call aether toggle
-bind = SUPER, C,     exec, qs -c desktop ipc call calendar toggle
+The palette ships two `GlobalShortcut`s, registered as `quickshell:palette-toggle` and `quickshell:palette-quick` (bind them globally in Hyprland to skip the `qs` client fork on the hot path). `palette-quick` opens pre-pivoted to the Quick-mode tile grid (battery, audio, wifi, bluetooth, weather, display, aether, cpu, calendar, screenshots, videos, power).
+
+Everything else goes through IPC:
+
+```sh
+qs -c desktop ipc call palette toggle        # omni-menu
+qs -c desktop ipc call palette openCategory Quick  # palette pinned to Quick mode
+qs -c desktop ipc call screenshots toggle    # screenshots browser
+qs -c desktop ipc call videos toggle         # video browser
+qs -c desktop ipc call display toggle        # display sliders
+qs -c desktop ipc call weather toggle        # weather popup
+qs -c desktop ipc call aether toggle         # aether blueprint picker
+qs -c desktop ipc call calendar toggle       # calendar
 ```
 
 The navbar omarchy/menu button calls `toggle()` on the sibling palette in-process, no IPC round-trip or subprocess.
@@ -41,7 +46,7 @@ The navbar omarchy/menu button calls `toggle()` on the sibling palette in-proces
 | Component | What it does |
 | --- | --- |
 | Bar | Kanji workspace markers, telemetry (cpu, mem, bt, wifi, audio, battery), centred clock, click-through popups for calendar, screenshots, videos, display, weather, aether blueprints. |
-| Omni-menu | Full-screen command palette over installed apps and the omarchy-menu (Style, Setup, Install, Remove, Update, System, Toggle, Trigger, Capture, Share, Learn), file search, GitHub repo search, processes, theme picker. |
+| Omni-menu | Full-screen command palette over installed apps and the omarchy-menu (Style, Setup, Install, Remove, Update, System, Toggle, Trigger, Capture, Share, Learn), file search, GitHub repo search, processes, theme picker, plus Quick-mode tile grid, tldr lookup (`$`), and local Ollama chat (`?`). |
 | Theme | Shared live palette sourced from `~/.config/omarchy/current/theme/colors.toml`. Drift animation runs on theme swap so bar + palette breathe in sync. |
 
 ## Bar layout
@@ -75,8 +80,34 @@ Type to filter across titles, categories, and a curated synonym list. Drill into
 | Home / End | Jump to first / last result |
 | Enter | Drill into a category, or run the selected action |
 | Ctrl + S | Star / unstar the current row |
+| Ctrl + Plus / Minus | Bump font scale (0.7x to 2.0x) |
+| Ctrl + = | Reset font scale to 1.0 |
+| Ctrl + C | In tldr / chat preview, copy selection (or whole rendered preview if nothing is selected) |
 | Backspace | Delete a char; when empty, walk back up one level |
-| Esc | Clear query, then unwind drill-down, then close |
+| Esc | Cascade: collapse quick-tile detail, then clear query, then unwind drill-down, then close |
+
+### Query shapes
+
+The first character of the query can pivot the whole pane:
+
+| Prefix | Mode |
+| --- | --- |
+| `$ <cmd>` | tldr lookup. Renders the tldr page inline in a preview pane, palette-tinted. Enter opens a floating terminal with the command pre-filled at a readline prompt. |
+| `? <question>` | Local Ollama chat. Streams against `qwen2.5-coder:3b` (no network). First Enter probes the daemon; if Ollama isn't installed / running / the model isn't pulled, the preview shows what to do and Enter runs the right setup step in a terminal. |
+
+### Quick mode
+
+`ALT + SPACE` opens the palette pre-pivoted to a Samsung-style 4x3 tile grid: battery, audio, network, bluetooth, weather, display, aether, cpu, calendar, screenshots, videos, power. Each tile binds to live navbar telemetry so the panel paints with current state on the very first frame.
+
+| Key | Action |
+| --- | --- |
+| Hjkl / arrow keys | Move tile selection |
+| Tab / Shift+Tab | Step forward / backward through the grid |
+| Enter | Expand the selected tile into a detail panel beside the grid |
+| Right-click on tile | Run the tile's long action (mute toggle, refresh, reset) without opening detail |
+| Esc | Collapse the detail panel, then close the palette |
+
+Expanding a tile compresses the grid to a 64px column on the left so the detail body (volume sliders, wifi list, bluetooth pairing, display warmth/brightness/gamma, aether blueprints, screenshot/video browsers, ...) gets the wider right half.
 
 ### Scoring
 
@@ -178,19 +209,7 @@ dbus-monitor --session "type='signal',interface='org.omarchy.Theme',member='Chan
 
 ## IPC
 
-External keybinds and scripts drive each surface:
-
-```sh
-qs -c desktop ipc call palette toggle        # omni-menu
-qs -c desktop ipc call screenshots toggle    # screenshots browser
-qs -c desktop ipc call videos toggle         # video browser
-qs -c desktop ipc call display toggle        # display sliders
-qs -c desktop ipc call weather toggle        # weather popup
-qs -c desktop ipc call aether toggle         # aether blueprint picker
-qs -c desktop ipc call calendar toggle       # calendar
-```
-
-`open`, `close`, and (where relevant) `refresh`, `reset`, `blank` are also exposed. `qs -c desktop ipc show` lists everything.
+`toggle`, `open`, `close`, and (where relevant) `refresh`, `reset`, `blank` are exposed on each target. `palette` also exposes `openCategory <name>` to pivot the palette into a drill-down on open. `qs -c desktop ipc show` lists everything. See [Surfaces](#surfaces) above for the common verbs.
 
 ## Weather location
 
@@ -224,7 +243,20 @@ Edit `omarchyItems` in `Data.js`. Each row is:
 
 ## Customization
 
-Everything lives under `desktop/`. Common tweaks:
+Everything lives under `desktop/`. The palette is split between `OmniMenu.qml` (state, search, IPC, shortcuts, key handler, panel chrome) and the visual chunks in `omni/`:
+
+| File | Owns |
+| --- | --- |
+| `omni/HeaderBar.qml` | Title row, breadcrumb, live result count, key-hint footer hint. |
+| `omni/SearchInput.qml` | Magnifier glyph, query text, blinking caret. Hidden in Quick mode. |
+| `omni/QuickContainer.qml` | Quick-mode tile grid + tile detail panel + the per-tile `QuickXxxBody` switch. |
+| `omni/ResultList.qml` | ListView and row delegate (icon, title, favourite star, category label). |
+| `omni/PreviewPane.qml` | Preview header and body for file / gh / proc / theme / tldr / chat modes. |
+| `omni/Footer.qml` | Exec line for the selected item. |
+| `omni/Format.js` | Markdown formatters for the tldr and chat previews. |
+| `omni/Tiles.js` | Quick-tile static data + dynamic builder against navbar telemetry. |
+
+Common tweaks:
 
 | Want to change | Where |
 | --- | --- |
@@ -234,6 +266,7 @@ Everything lives under `desktop/`. Common tweaks:
 | Palette font | `mono` / `serif` in `OmniMenu.qml`. |
 | Palette result cap | `maxResults` in `OmniMenu.qml`. |
 | Score weights | `scPrefix`, `scTitle`, `scKw`, `scCat` in `OmniMenu.qml`. |
+| Quick-tile order / actions | `base` array in `omni/Tiles.js`. |
 | Telemetry interval | `Timer { interval: ... }` blocks in `Navbar.qml`. |
 | Drift animation | `driftDelay` / `driftAnim` in `Theme.qml`. |
 
