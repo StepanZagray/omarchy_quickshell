@@ -90,6 +90,9 @@ Item {
     // alongside the category drills but triggers off the query itself,
     // so the user can pivot in from any drill without going to root.
     readonly property bool tldrMode: root.query.charAt(0) === "$"
+    // Sibling query-shape mode: `? <question>` pivots to a local
+    // Ollama chat preview against qwen2.5-coder:3b.
+    readonly property bool chatMode: root.query.charAt(0) === "?"
     // Live font multiplier — every `font.pixelSize` binding in this
     // file multiplies its base by this value. Ctrl++ / Ctrl+- nudge
     // it in 0.1 steps; Ctrl+= resets to 1.0. Clamped to keep the
@@ -279,7 +282,7 @@ Item {
     GhSearch {
         id: ghSearch
         query: root.query
-        active: root.ghMode && !root.tldrMode
+        active: root.ghMode && !root.tldrMode && !root.chatMode
         selectedItem: root.filteredItems[root.selectedIndex] || null
     }
     readonly property alias ghReady:        ghSearch.ready
@@ -304,7 +307,7 @@ Item {
         id: fileSearch
         query: root.query
         queryTokens: root.queryTokens
-        active: root.fileMode && !root.tldrMode
+        active: root.fileMode && !root.tldrMode && !root.chatMode
         selectedItem: root.filteredItems[root.selectedIndex] || null
     }
     readonly property alias fileItems:    fileSearch.items
@@ -316,7 +319,7 @@ Item {
 
     Processes {
         id: processes
-        active: root.procMode
+        active: root.procMode && !root.chatMode
         selectedItem: root.filteredItems[root.selectedIndex] || null
     }
     readonly property alias procItems:    processes.items
@@ -326,7 +329,7 @@ Item {
 
     Themes {
         id: themes
-        active: root.themeMode
+        active: root.themeMode && !root.chatMode
     }
     readonly property alias themeItems:   themes.items
     readonly property alias themeLoaded:  themes.loaded
@@ -342,9 +345,33 @@ Item {
     readonly property alias tldrPreview:  tldrSearch.previewText
     readonly property alias tldrTool:     tldrSearch.toolName
 
-    readonly property bool previewActive: root.tldrMode || root.fileMode || root.ghMode || root.procMode || root.themeMode
+    // Local-LLM chat preview. Triggered by `? <question>` in the query.
+    OllamaChat {
+        id: ollamaChat
+        query: root.query
+        active: root.chatMode
+    }
+    readonly property alias chatItems:     ollamaChat.items
+    readonly property alias chatRunning:   ollamaChat.running
+    readonly property alias chatPreview:   ollamaChat.previewText
+    readonly property alias chatStatus:    ollamaChat.status
+    readonly property alias chatPrompt:    ollamaChat.prompt
+    readonly property alias chatSubmitted: ollamaChat.submitted
+    readonly property alias chatModel:     ollamaChat.model_
+
+    readonly property bool previewActive: root.tldrMode || root.chatMode || root.fileMode || root.ghMode || root.procMode || root.themeMode
     readonly property bool previewHasContent: {
         if (root.tldrMode) return root.tldrPreview !== "";
+        if (root.chatMode) {
+            // Probing: no content yet. Status != "ok": show the
+            // install/start/pull hint as content. OK + not submitted:
+            // empty (the placeholder hint shows). OK + submitted:
+            // there's a streaming or completed answer.
+            if (root.chatStatus === "") return false;
+            if (root.chatStatus !== "ok") return true;
+            if (!root.chatSubmitted) return false;
+            return root.chatPreview !== "";
+        }
         if (root.fileMode || root.ghMode)
             return root.previewPath !== "" || root.previewRepoUrl !== "";
         if (root.procMode) return processes.previewPid !== "";
@@ -364,7 +391,13 @@ Item {
         root.visible_ = true;
         navbarApps.probe();
     }
-    function close() { root.visible_ = false; }
+    function close() {
+        root.visible_ = false;
+        // Cancel any in-flight stream and zero chat state so the next
+        // session starts fresh. The ollama daemon itself is left
+        // running — we don't manage its lifecycle, only our use of it.
+        ollamaChat.clear();
+    }
     function toggle() { if (root.visible_) close(); else open(); }
     function goUp() {
         // Step back one level. At root this is a no-op so the caller can
@@ -384,6 +417,7 @@ Item {
         fileSearch.clear();
         ghSearch.clear();
         tldrSearch.clear();
+        ollamaChat.clear();
         // Processes/Themes own their own clear()-on-deactivate via their
         // `active` binding, so the shell doesn't have to nudge them when
         // the filter changes — they react automatically.
@@ -479,6 +513,96 @@ Item {
         return out.join("<br>");
     }
 
+    // ---------- chat markdown styling ----------
+    // Renders the LLM's markdown output as palette-aware RichText.
+    // Lean (not CommonMark-spec): handles fenced code blocks, headings
+    // (# / ## / ###), inline `code`, and `-`/`*` bullets. Anything
+    // fancier (bold, italic, links, tables) falls back to plain prose.
+    // baseColor lets callers tint the whole block — used by the chat
+    // preview pane to dim status messages in `inkDeep`.
+    function formatChatHtml(raw, baseColor) {
+        if (!raw) return "";
+        function hex(c) {
+            const s = c.toString();
+            return s.length === 9 ? "#" + s.substring(3) : s;
+        }
+        const ink = baseColor ? hex(baseColor) : hex(root.ink);
+        const inkDeep = hex(root.inkDeep);
+        const indigo = hex(root.indigo);
+        const seal = hex(root.seal);
+
+        function esc(s) {
+            return s.replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+        }
+        function wrap(color, text) {
+            return '<span style="color:' + color + '">' + esc(text) + '</span>';
+        }
+        // Inline `code` only — keep bold/italic out so the LLM's
+        // stray asterisks (common in prose) don't get eaten.
+        function styleInline(s, base) {
+            let out = "", i = 0;
+            while (i < s.length) {
+                const j = s.indexOf("`", i);
+                if (j < 0) { out += wrap(base, s.substring(i)); break; }
+                if (j > i) out += wrap(base, s.substring(i, j));
+                const k = s.indexOf("`", j + 1);
+                if (k < 0) { out += wrap(base, s.substring(j)); break; }
+                out += wrap(indigo, s.substring(j + 1, k));
+                i = k + 1;
+            }
+            return out;
+        }
+
+        const lines = raw.split("\n");
+        const out = [];
+        let inCode = false;
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.replace(/^\s+/, "");
+            // Fenced code block delimiter — toggle state, drop the
+            // fence line itself.
+            if (trimmed.indexOf("```") === 0) {
+                inCode = !inCode;
+                continue;
+            }
+            if (inCode) {
+                // Preserve indentation; render whole line in indigo.
+                out.push(wrap(indigo, line));
+                continue;
+            }
+            if (line.length === 0) { out.push(""); continue; }
+            // Headings
+            if (line.charAt(0) === "#") {
+                let level = 0;
+                while (level < line.length && line.charAt(level) === "#") level++;
+                if (level <= 4) {
+                    const body = line.substring(level).trim();
+                    if (body.length > 0) {
+                        out.push("<b>" + styleInline(body, ink) + "</b>");
+                        continue;
+                    }
+                }
+            }
+            // Bullets — accept `- ` or `* ` with the required space so
+            // bare hyphens / asterisks in prose don't get eaten.
+            if ((line.charAt(0) === "-" || line.charAt(0) === "*")
+                && line.charAt(1) === " ") {
+                out.push(wrap(seal, "• ") + styleInline(line.substring(2), ink));
+                continue;
+            }
+            // Numbered lists: `1.` `2.` ... with a space after.
+            const nm = line.match(/^(\d+)\.\s+(.*)$/);
+            if (nm) {
+                out.push(wrap(seal, nm[1] + ". ") + styleInline(nm[2], ink));
+                continue;
+            }
+            out.push(styleInline(line, ink));
+        }
+        return out.join("<br>");
+    }
+
     // ---------- Icon resolution ----------
     // `.desktop` Icon field is either an absolute path or an icon-theme
     // name. Qt's QQmlEngine doesn't know about XDG themes, so theme names
@@ -543,6 +667,57 @@ Item {
         // text in $1 inside the inner bash, never as code. Bypasses
         // bookmarks.record() — tldr lookups aren't apps and shouldn't
         // pollute history or favourites.
+        // ollama chat → Enter behaviour depends on the readiness state:
+        //   no-ollama  no-op (user installs themselves; we don't run a
+        //              package manager unprompted)
+        //   no-daemon  start the daemon in a floating terminal
+        //   no-model   pull qwen2.5-coder:3b in a floating terminal
+        //   ok+!sub    submit the prompt; preview streams inline,
+        //              panel stays open
+        //   ok+sub     no-op; user can edit and resubmit, or Esc out
+        if (item.isOllama) {
+            const status = ollamaChat.status;
+            if (status === "no-ollama") {
+                // Don't auto-install. The preview body has already
+                // told the user what to do.
+                return;
+            }
+            if (status === "no-daemon") {
+                runner.command = ["setsid", "-f", "uwsm-app", "--",
+                    "xdg-terminal-exec",
+                    "--app-id=org.omarchy.terminal",
+                    "--title=Omarchy",
+                    "-e", "bash", "-c",
+                    "echo 'Starting ollama daemon...'; "
+                    + "systemctl --user start ollama 2>/dev/null "
+                    + "|| sudo systemctl start ollama 2>/dev/null "
+                    + "|| ollama serve; "
+                    + "echo; echo '[done — close to return]'; exec bash"];
+                runner.running = false;
+                runner.running = true;
+                root.close();
+                return;
+            }
+            if (status === "no-model") {
+                runner.command = ["setsid", "-f", "uwsm-app", "--",
+                    "xdg-terminal-exec",
+                    "--app-id=org.omarchy.terminal",
+                    "--title=Omarchy",
+                    "-e", "ollama", "pull", ollamaChat.model_];
+                runner.running = false;
+                runner.running = true;
+                root.close();
+                return;
+            }
+            if (status === "ok" && !ollamaChat.submitted) {
+                ollamaChat.submit();
+                // Keep the panel open so the response streams in.
+                return;
+            }
+            // status === "ok" && submitted: stay open, no-op. User
+            // can edit the prompt and the new submit fires on Enter.
+            return;
+        }
         if (item.isTldr) {
             runner.command = ["setsid", "-f", "uwsm-app", "--",
                 "xdg-terminal-exec",
@@ -610,6 +785,8 @@ Item {
         // tldr mode owns the query entirely — its synthetic row is the
         // only thing the list should show, scoring doesn't apply.
         if (root.tldrMode) return root.tldrItems;
+        // chat mode is the other query-shape mode; same one-row pivot.
+        if (root.chatMode) return root.chatItems;
         // File and GitHub modes are their own worlds: fd and gh already
         // did the filtering, so we just pass their results through.
         if (root.fileMode) return root.fileItems;
@@ -865,6 +1042,29 @@ Item {
                                || (e2.key === Qt.Key_Tab && (e2.modifiers & Qt.ShiftModifier)))) {
                     root.moveQuickSelection(-1);
                     event.accepted = true;
+                } else if (root.chatMode && root.previewHasContent
+                           && (e2.key === Qt.Key_Up || e2.key === Qt.Key_Down
+                               || e2.key === Qt.Key_PageUp || e2.key === Qt.Key_PageDown
+                               || e2.key === Qt.Key_Home || e2.key === Qt.Key_End
+                               || e2.key === Qt.Key_Tab || e2.key === Qt.Key_Backtab)) {
+                    // chat mode: same scroll routing as tldr mode below.
+                    // List nav is a no-op here (single synthetic row).
+                    const f = chatPreviewScroll;
+                    const max = Math.max(0, f.contentHeight - f.height);
+                    const line = 18;
+                    const page = Math.max(line, f.height * 0.9);
+                    let dy = 0;
+                    if (e2.key === Qt.Key_Up
+                        || (e2.key === Qt.Key_Tab && (e2.modifiers & Qt.ShiftModifier))
+                        || e2.key === Qt.Key_Backtab) dy = -line;
+                    else if (e2.key === Qt.Key_Down
+                             || (e2.key === Qt.Key_Tab && !(e2.modifiers & Qt.ShiftModifier))) dy = line;
+                    else if (e2.key === Qt.Key_PageUp)   dy = -page;
+                    else if (e2.key === Qt.Key_PageDown) dy = page;
+                    else if (e2.key === Qt.Key_Home) { f.contentY = 0; event.accepted = true; return; }
+                    else if (e2.key === Qt.Key_End)  { f.contentY = max; event.accepted = true; return; }
+                    f.contentY = Math.max(0, Math.min(max, f.contentY + dy));
+                    event.accepted = true;
                 } else if (root.tldrMode && root.tldrPreview !== ""
                            && (e2.key === Qt.Key_Up || e2.key === Qt.Key_Down
                                || e2.key === Qt.Key_PageUp || e2.key === Qt.Key_PageDown
@@ -934,7 +1134,7 @@ Item {
                     event.accepted = true;
                 } else if (e2.key === Qt.Key_S && (e2.modifiers & Qt.ControlModifier)) {
                     const it = root.filteredItems[root.selectedIndex];
-                    if (it && !it.isCategory && !it.isTldr) bookmarks.toggleFavourite(it);
+                    if (it && !it.isCategory && !it.isTldr && !it.isOllama) bookmarks.toggleFavourite(it);
                     event.accepted = true;
                 } else if ((e2.modifiers & Qt.ControlModifier)
                            && (e2.key === Qt.Key_Plus || e2.key === Qt.Key_Equal
@@ -946,6 +1146,22 @@ Item {
                     if (e2.key === Qt.Key_Plus) root.bumpFontScale(+0.1);
                     else if (e2.key === Qt.Key_Minus) root.bumpFontScale(-0.1);
                     else /* Key_Equal without Shift */ root.fontScale = 1.0;
+                    event.accepted = true;
+                } else if (e2.key === Qt.Key_C && (e2.modifiers & Qt.ControlModifier)
+                           && root.chatMode && root.chatPreview !== "") {
+                    // Ctrl+C: if the user dragged a selection in the
+                    // rendered RichText edit, copy that (lossy — Qt
+                    // strips inline `code` backticks during conversion,
+                    // but it's what they asked for). With no selection,
+                    // copy the full raw markdown from the hidden plain-
+                    // text shadow so pasted commands keep their syntax.
+                    if (chatPreviewEdit.selectedText.length > 0) {
+                        chatPreviewEdit.copy();
+                    } else {
+                        chatPlainShadow.selectAll();
+                        chatPlainShadow.copy();
+                        chatPlainShadow.deselect();
+                    }
                     event.accepted = true;
                 } else if (e2.key === Qt.Key_C && (e2.modifiers & Qt.ControlModifier)
                            && root.tldrMode && root.tldrPreview !== "") {
@@ -1695,6 +1911,14 @@ Item {
                                     if (root.tldrRunning) return "FETCHING TLDR…";
                                     return "NO TLDR PAGE";
                                 }
+                                if (root.chatMode) {
+                                    if (root.chatPrompt.length === 0) return "? QUESTION  ·  LOCAL AI";
+                                    if (root.chatStatus === "")    return "CHECKING OLLAMA…";
+                                    if (root.chatStatus !== "ok")  return "OLLAMA SETUP NEEDED";
+                                    if (!root.chatSubmitted)        return "↵ TO ASK";
+                                    if (root.chatRunning)           return "STREAMING…";
+                                    return "READY  ·  EDIT TO ASK AGAIN";
+                                }
                                 if (root.fileMode) {
                                     if (root.query.length === 0) return "TYPE TO SEARCH ~";
                                     if (root.fdRunning) return "SEARCHING…";
@@ -1748,6 +1972,7 @@ Item {
                             text: {
                                 const it = root.filteredItems[root.selectedIndex];
                                 if (root.tldrMode) return root.tldrTool;
+                                if (root.chatMode) return root.chatModel;
                                 if (root.ghMode) return root.previewRepo;
                                 if (root.procMode) return it ? it.title : "";
                                 if (root.themeMode) return it ? it.title : "";
@@ -1773,6 +1998,16 @@ Item {
                                 if (root.tldrMode) return root.tldrTool.length === 0
                                     ? "type a command name after $"
                                     : "tldr  ·  ↵ opens terminal with command ready";
+                                if (root.chatMode) {
+                                    if (root.chatPrompt.length === 0) return "type a question after ?";
+                                    if (root.chatStatus === "")    return "probing local ollama…";
+                                    if (root.chatStatus === "no-ollama") return "install ollama first";
+                                    if (root.chatStatus === "no-daemon") return "↵ to start the ollama daemon";
+                                    if (root.chatStatus === "no-model")  return "↵ to pull " + root.chatModel + " (~2 GB)";
+                                    if (!root.chatSubmitted)        return "↵ to ask  ·  local, offline";
+                                    if (root.chatRunning)           return "streaming  ·  edit to ask again";
+                                    return "↵ done  ·  edit prompt and ↵ to ask again";
+                                }
                                 if (root.ghMode) return root.previewRepoUrl;
                                 if (root.procMode) return it ? ("pid " + (it.pid || "") + "  ·  ↵ kills (SIGTERM)") : "";
                                 if (root.themeMode) return it
@@ -1814,6 +2049,12 @@ Item {
                                     if (root.tldrMode) {
                                         if (root.tldrTool.length === 0) return "TYPE A COMMAND";
                                         return root.tldrRunning ? "FETCHING…" : "NO TLDR PAGE";
+                                    }
+                                    if (root.chatMode) {
+                                        if (root.chatPrompt.length === 0) return "TYPE A QUESTION";
+                                        if (root.chatStatus === "") return "CHECKING…";
+                                        if (!root.chatSubmitted) return "PRESS ENTER TO ASK";
+                                        return root.chatRunning ? "STREAMING…" : "DONE";
                                     }
                                     if (root.ghMode)    return "SELECT A REPO";
                                     if (root.procMode)  return "SELECT A PROCESS";
@@ -1919,6 +2160,111 @@ Item {
                                     id: tldrPreviewEdit
                                     width: tldrPreviewScroll.width
                                     text: root.formatTldrHtml(root.tldrPreview)
+                                    color: root.ink
+                                    font.family: root.mono
+                                    font.pixelSize: 13 * root.fontScale
+                                    wrapMode: TextEdit.Wrap
+                                    textFormat: TextEdit.RichText
+                                    readOnly: true
+                                    selectByMouse: true
+                                    persistentSelection: true
+                                    activeFocusOnPress: false
+                                    selectionColor: root.indigo
+                                    selectedTextColor: root.paper
+                                }
+                            }
+
+                            // Chat preview — same scroll/select/copy
+                            // shape as the tldr one above. Shows the
+                            // setup hint text when status is not "ok",
+                            // otherwise shows the streamed response.
+                            // Auto-scrolls to the bottom while running
+                            // so the user sees the latest tokens.
+                            Flickable {
+                                id: chatPreviewScroll
+                                anchors.fill: parent
+                                visible: root.chatMode && root.previewHasContent
+                                contentWidth: width
+                                contentHeight: chatPreviewEdit.implicitHeight
+                                clip: true
+                                interactive: false
+                                boundsBehavior: Flickable.StopAtBounds
+
+                                Connections {
+                                    target: root
+                                    function onChatPreviewChanged() {
+                                        if (root.chatRunning) {
+                                            const max = Math.max(0, chatPreviewScroll.contentHeight - chatPreviewScroll.height);
+                                            chatPreviewScroll.contentY = max;
+                                        }
+                                    }
+                                }
+                                // Reset scroll only on *new submissions*
+                                // — listening to the signal (not the
+                                // submitted property) avoids resetting
+                                // when prompt-edit flips submitted false,
+                                // which would slam contentY=0 mid-read.
+                                Connections {
+                                    target: ollamaChat
+                                    function onPromptSubmitted() {
+                                        chatPreviewScroll.contentY = 0;
+                                    }
+                                }
+
+                                WheelHandler {
+                                    onWheel: (event) => {
+                                        const f = chatPreviewScroll;
+                                        const max = Math.max(0, f.contentHeight - f.height);
+                                        f.contentY = Math.max(0, Math.min(max,
+                                            f.contentY - event.angleDelta.y * 0.5));
+                                    }
+                                }
+
+                                // Hidden plain-text mirror of chatPreview.
+                                // Used by Ctrl+C (no-selection path) to put
+                                // the raw markdown on the clipboard with
+                                // backticks and bullet hyphens preserved —
+                                // Qt's RichText→plain conversion strips
+                                // those when copy()ing from chatPreviewEdit.
+                                TextEdit {
+                                    id: chatPlainShadow
+                                    visible: false
+                                    width: 0
+                                    height: 0
+                                    text: root.chatPreview
+                                    textFormat: TextEdit.PlainText
+                                    readOnly: true
+                                }
+                                TextEdit {
+                                    id: chatPreviewEdit
+                                    width: chatPreviewScroll.width
+                                    // Status messages get dimmed via the
+                                    // baseColor arg; live response uses
+                                    // the default ink. formatChatHtml
+                                    // escapes HTML and converts newlines
+                                    // to <br> so plain status text is
+                                    // safe under RichText too.
+                                    text: {
+                                        if (root.chatStatus === "no-ollama")
+                                            return root.formatChatHtml(
+                                                "Ollama is not installed.\n\n"
+                                              + "Install it from your package manager:\n"
+                                              + "  `yay -S ollama`\n"
+                                              + "  `sudo systemctl enable --now ollama`\n"
+                                              + "  `ollama pull " + root.chatModel + "`\n\n"
+                                              + "Then return here and try again.", root.inkDeep);
+                                        if (root.chatStatus === "no-daemon")
+                                            return root.formatChatHtml(
+                                                "Ollama is installed but the daemon is not responding.\n\n"
+                                              + "Press Enter to start it in a terminal. "
+                                              + "You can close the terminal once you see the daemon is up.", root.inkDeep);
+                                        if (root.chatStatus === "no-model")
+                                            return root.formatChatHtml(
+                                                "Model `" + root.chatModel + "` is not pulled yet (~2 GB).\n\n"
+                                              + "Press Enter to fetch it. This is a one-time download; "
+                                              + "the weights live at `~/.ollama/models/`.", root.inkDeep);
+                                        return root.formatChatHtml(root.chatPreview, null);
+                                    }
                                     color: root.ink
                                     font.family: root.mono
                                     font.pixelSize: 13 * root.fontScale
