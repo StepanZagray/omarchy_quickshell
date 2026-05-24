@@ -153,6 +153,11 @@ Item {
     property var _quickTilesDynCache: ({})
     readonly property var quickTilesDyn: {
         if (!root.visible_) return root._quickTilesDynCache;
+        // No navbar yet (shell reload, hot-swap, or a tick before the
+        // sibling Navbar wires up): return an empty snapshot but do NOT
+        // store it, so the cached previous-good values survive the gap
+        // and the close-fade never flashes blank tiles.
+        if (!root.navbar) return ({});
         const dyn = Tiles.buildDyn(root.navbar);
         root._quickTilesDynCache = dyn;
         return dyn;
