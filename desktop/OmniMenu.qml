@@ -90,6 +90,17 @@ Item {
     // alongside the category drills but triggers off the query itself,
     // so the user can pivot in from any drill without going to root.
     readonly property bool tldrMode: root.query.charAt(0) === "$"
+    // Live font multiplier — every `font.pixelSize` binding in this
+    // file multiplies its base by this value. Ctrl++ / Ctrl+- nudge
+    // it in 0.1 steps; Ctrl+= resets to 1.0. Clamped to keep the
+    // panel usable at extremes.
+    property real fontScale: 1.0
+    function bumpFontScale(delta) {
+        const next = Math.max(0.7, Math.min(2.0, root.fontScale + delta));
+        // Snap to one decimal so successive bumps don't drift on
+        // floating-point round-off.
+        root.fontScale = Math.round(next * 10) / 10;
+    }
     // null = no expansion; otherwise the tile object whose detail panel
     // is currently revealed under the grid.
     property var expandedTile: null
@@ -925,6 +936,17 @@ Item {
                     const it = root.filteredItems[root.selectedIndex];
                     if (it && !it.isCategory && !it.isTldr) bookmarks.toggleFavourite(it);
                     event.accepted = true;
+                } else if ((e2.modifiers & Qt.ControlModifier)
+                           && (e2.key === Qt.Key_Plus || e2.key === Qt.Key_Equal
+                               || e2.key === Qt.Key_Minus)) {
+                    // Ctrl++ / Ctrl+- nudge the omni-menu font scale;
+                    // Ctrl+= resets to default. Plus is reached via
+                    // Shift+= on US layouts (Qt delivers Qt.Key_Plus),
+                    // and via a dedicated key on numpads / EU layouts.
+                    if (e2.key === Qt.Key_Plus) root.bumpFontScale(+0.1);
+                    else if (e2.key === Qt.Key_Minus) root.bumpFontScale(-0.1);
+                    else /* Key_Equal without Shift */ root.fontScale = 1.0;
+                    event.accepted = true;
                 } else if (e2.key === Qt.Key_C && (e2.modifiers & Qt.ControlModifier)
                            && root.tldrMode && root.tldrPreview !== "") {
                     // Ctrl+C in tldr mode: copy the active selection if
@@ -973,7 +995,7 @@ Item {
                                   : "OMNI › " + root.sectionIcon + "  " + root.categoryFilter.toUpperCase()
                             color: root.ink
                             font.family: root.mono
-                            font.pixelSize: 19
+                            font.pixelSize: 19 * root.fontScale
                             font.letterSpacing: 4
                             font.weight: Font.Medium
                         }
@@ -1037,7 +1059,7 @@ Item {
                             }
                             color: root.inkDeep
                             font.family: root.mono
-                            font.pixelSize: 11
+                            font.pixelSize: 11 * root.fontScale
                             font.letterSpacing: 2
                         }
                     }
@@ -1062,7 +1084,7 @@ Item {
                         }
                         color: root.inkDeep
                         font.family: root.mono
-                        font.pixelSize: 10
+                        font.pixelSize: 10 * root.fontScale
                         font.letterSpacing: 2
                         opacity: 0.6
                     }
@@ -1144,7 +1166,7 @@ Item {
                                         text: dyn.glyph || ""
                                         color: dyn.tone || root.ink
                                         font.family: root.mono
-                                        font.pixelSize: quickGrid.colMode ? 14 : 20
+                                        font.pixelSize: (quickGrid.colMode ? 14 : 20) * root.fontScale
                                     }
                                     Text {
                                         anchors.horizontalCenter: parent.horizontalCenter
@@ -1154,7 +1176,7 @@ Item {
                                         text: root.tileDyn(tileSlot.modelData).label || ""
                                         color: root.ink
                                         font.family: root.mono
-                                        font.pixelSize: quickGrid.colMode ? 7 : 9
+                                        font.pixelSize: (quickGrid.colMode ? 7 : 9) * root.fontScale
                                         font.letterSpacing: quickGrid.colMode ? 0.8 : 1.4
                                         font.weight: Font.Medium
                                     }
@@ -1172,7 +1194,7 @@ Item {
                                         text: root.tileDyn(tileSlot.modelData).sub || ""
                                         color: root.inkDeep
                                         font.family: root.mono
-                                        font.pixelSize: 8
+                                        font.pixelSize: 8 * root.fontScale
                                         font.letterSpacing: 1
                                         opacity: 0.85
                                     }
@@ -1284,7 +1306,7 @@ Item {
                             text: dyn.glyph || ""
                             color: dyn.tone || root.ink
                             font.family: root.mono
-                            font.pixelSize: 26
+                            font.pixelSize: 26 * root.fontScale
                             Layout.alignment: Qt.AlignVCenter
                         }
                         Column {
@@ -1295,7 +1317,7 @@ Item {
                                 text: root.tileDyn(detailPanel.t).label || ""
                                 color: root.ink
                                 font.family: root.mono
-                                font.pixelSize: 13
+                                font.pixelSize: 13 * root.fontScale
                                 font.letterSpacing: 2
                                 font.weight: Font.Medium
                             }
@@ -1303,7 +1325,7 @@ Item {
                                 text: root.tileDyn(detailPanel.t).sub || ""
                                 color: root.inkDeep
                                 font.family: root.mono
-                                font.pixelSize: 10
+                                font.pixelSize: 10 * root.fontScale
                                 font.letterSpacing: 1
                                 opacity: 0.85
                             }
@@ -1321,7 +1343,7 @@ Item {
                                 text: "×"
                                 color: root.inkDeep
                                 font.family: root.mono
-                                font.pixelSize: 14
+                                font.pixelSize: 14 * root.fontScale
                             }
                             MouseArea {
                                 id: closeMouse
@@ -1427,7 +1449,7 @@ Item {
                               : "󰍉"
                         color: root.seal
                         font.family: root.mono
-                        font.pixelSize: 16
+                        font.pixelSize: 16 * root.fontScale
                     }
 
                     Text {
@@ -1446,7 +1468,7 @@ Item {
                         color: root.query.length === 0 ? root.inkDeep : root.ink
                         opacity: root.query.length === 0 ? 0.5 : 1.0
                         font.family: root.mono
-                        font.pixelSize: 14
+                        font.pixelSize: 14 * root.fontScale
                         font.letterSpacing: 1
                     }
 
@@ -1561,7 +1583,7 @@ Item {
                                     text: row.modelData.icon || "·"
                                     color: iconText.tint
                                     font.family: root.mono
-                                    font.pixelSize: 16
+                                    font.pixelSize: 16 * root.fontScale
                                 }
 
                                 // Hidden because MultiEffect draws the
@@ -1608,7 +1630,7 @@ Item {
                                       : row.modelData.title
                                 color: row.isSelected ? root.ink : root.fg
                                 font.family: root.mono
-                                font.pixelSize: 13
+                                font.pixelSize: 13 * root.fontScale
                                 font.weight: row.isSelected ? Font.Medium : Font.Light
                                 font.letterSpacing: 1
                                 elide: Text.ElideRight
@@ -1623,7 +1645,7 @@ Item {
                                 text: "󰓎"
                                 color: root.seal
                                 font.family: root.mono
-                                font.pixelSize: 11
+                                font.pixelSize: 11 * root.fontScale
                             }
                             Text {
                                 id: catText
@@ -1640,7 +1662,7 @@ Item {
                                 color: row.isSelected ? root.seal : root.inkDeep
                                 opacity: row.isSelected ? 0.95 : 0.65
                                 font.family: root.mono
-                                font.pixelSize: 10
+                                font.pixelSize: 10 * root.fontScale
                                 font.letterSpacing: row.modelData.rawCategory ? 0 : 2
                                 elide: Text.ElideLeft
                                 horizontalAlignment: Text.AlignRight
@@ -1693,7 +1715,7 @@ Item {
                             }
                             color: root.inkDeep
                             font.family: root.mono
-                            font.pixelSize: 11
+                            font.pixelSize: 11 * root.fontScale
                             font.letterSpacing: 3
                             opacity: 0.6
                         }
@@ -1733,7 +1755,7 @@ Item {
                             }
                             color: root.ink
                             font.family: root.mono
-                            font.pixelSize: 13
+                            font.pixelSize: 13 * root.fontScale
                             font.weight: Font.Medium
                             font.letterSpacing: 1
                             wrapMode: Text.WrapAnywhere
@@ -1760,7 +1782,7 @@ Item {
                             }
                             color: root.inkDeep
                             font.family: root.mono
-                            font.pixelSize: 10
+                            font.pixelSize: 10 * root.fontScale
                             font.letterSpacing: 1
                             elide: Text.ElideLeft
                             opacity: 0.75
@@ -1800,7 +1822,7 @@ Item {
                                 }
                                 color: root.inkDeep
                                 font.family: root.mono
-                                font.pixelSize: 10
+                                font.pixelSize: 10 * root.fontScale
                                 font.letterSpacing: 3
                                 opacity: 0.5
                             }
@@ -1828,7 +1850,7 @@ Item {
                                 text: root.previewText
                                 color: root.ink
                                 font.family: root.mono
-                                font.pixelSize: 10
+                                font.pixelSize: 10 * root.fontScale
                                 lineHeight: 1.3
                                 wrapMode: Text.Wrap
                                 textFormat: Text.PlainText
@@ -1842,7 +1864,7 @@ Item {
                                 text: root.previewMeta
                                 color: root.inkDeep
                                 font.family: root.mono
-                                font.pixelSize: 11
+                                font.pixelSize: 11 * root.fontScale
                                 lineHeight: 1.4
                                 wrapMode: Text.WordWrap
                                 textFormat: Text.PlainText
@@ -1899,7 +1921,7 @@ Item {
                                     text: root.formatTldrHtml(root.tldrPreview)
                                     color: root.ink
                                     font.family: root.mono
-                                    font.pixelSize: 13
+                                    font.pixelSize: 13 * root.fontScale
                                     wrapMode: TextEdit.Wrap
                                     textFormat: TextEdit.RichText
                                     readOnly: true
@@ -1917,7 +1939,7 @@ Item {
                                 text: root.previewReadme
                                 color: root.ink
                                 font.family: root.mono
-                                font.pixelSize: 10
+                                font.pixelSize: 10 * root.fontScale
                                 lineHeight: 1.3
                                 wrapMode: Text.Wrap
                                 textFormat: Text.PlainText
@@ -1932,7 +1954,7 @@ Item {
                                 text: root.procPreviewText
                                 color: root.ink
                                 font.family: root.mono
-                                font.pixelSize: 10
+                                font.pixelSize: 10 * root.fontScale
                                 lineHeight: 1.4
                                 wrapMode: Text.Wrap
                                 textFormat: Text.PlainText
@@ -2021,7 +2043,7 @@ Item {
                         }
                         color: root.inkDeep
                         font.family: root.mono
-                        font.pixelSize: 10
+                        font.pixelSize: 10 * root.fontScale
                         font.letterSpacing: 1
                         opacity: 0.65
                     }
