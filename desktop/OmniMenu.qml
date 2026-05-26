@@ -500,6 +500,33 @@ Item {
     // token is a prefix on its own. Uses precomputed lowercased fields
     // (`_t`/`_k`/`_c`) so a 200+ item × N-token scoring pass doesn't
     // re-lowercase the same strings on every keystroke.
+    // Title-only score for the primary sort axis. When the typed query
+    // hits the title, that's a strong "user wants THIS" signal and the
+    // bucket competition (App vs omarchy vs theme) should happen here,
+    // before keyword/category bonuses can flip the ranking.
+    function primaryScore(item, tokens) {
+        const title = item._t;
+        let total = 0;
+        for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i];
+            if (title.indexOf(t) === 0) total += root.scPrefix;
+            else if (title.indexOf(t) >= 0) total += root.scTitle;
+        }
+        return total;
+    }
+
+    // Kind rank used as a tie-break after primaryScore+isCategory. Lower wins.
+    // Categories chosen to satisfy "Apps before omarchy/navbar before
+    // niche (TUIs, themes)" without source-tagging — the relevant
+    // category strings are stable across sources.
+    function kindRank(item) {
+        const c = item.category;
+        if (c === "App") return 1;
+        if (c === "TUI") return 3;
+        if (c === "THEME" || c === "ACTIVE") return 4;
+        return 2;
+    }
+
     function scoreItem(item, tokens) {
         const title = item._t;
         const kw = item._k;
@@ -556,25 +583,67 @@ Item {
         else if (filter !== "")  pool = root.allItems.filter(it => it.category === filter);
         else                     pool = root.navRows.concat(root.allItems);
 
-        // Empty query: preserve insertion order (nav rows first, then
-        // omarchy actions, then apps). No scoring, no allocation overhead.
+        // Empty query, default view: drill-ins first, then up to 5
+        // favourites, then leaf actions/apps. TUIs and themes are
+        // skipped from this view to keep the cold open scannable -
+        // they stay in `allItems` so the scored branch below still
+        // finds them when typed. Drill-in modes (fav/hist/proc/theme)
+        // and category filters keep their existing pool unchanged.
         if (tokens.length === 0) {
-            return pool.length <= cap ? pool : pool.slice(0, cap);
+            if (root.favMode || root.histMode || root.procMode
+                || root.themeMode || filter !== "") {
+                return pool.length <= cap ? pool : pool.slice(0, cap);
+            }
+            const favs = bookmarks.favouriteItems.slice(0, 5);
+            const favKeys = {};
+            for (let i = 0; i < favs.length; i++) {
+                favKeys[Data.itemKey(favs[i])] = true;
+            }
+            const tail = [];
+            for (let i = 0; i < root.allItems.length; i++) {
+                const it = root.allItems[i];
+                const c = it.category;
+                if (c === "TUI" || c === "THEME" || c === "ACTIVE") continue;
+                if (favKeys[Data.itemKey(it)]) continue;
+                tail.push(it);
+            }
+            const out = root.navRows.concat(favs).concat(tail);
+            return out.length <= cap ? out : out.slice(0, cap);
         }
 
         const scored = [];
         for (let i = 0; i < pool.length; i++) {
             const it = pool[i];
             const s = root.scoreItem(it, tokens);
-            if (s > 0) scored.push({ s: s, item: it });
+            if (s > 0) {
+                scored.push({
+                    s: s,
+                    p: root.primaryScore(it, tokens),
+                    item: it
+                });
+            }
         }
         scored.sort((a, b) => {
-            if (b.s !== a.s) return b.s - a.s;
-            // Tie-break: nav rows come first so a typed "setup" surfaces
-            // the Setup drill-in row above any Setup-category leaf.
+            // Primary axis: how well the TITLE matched. Items with a
+            // title hit always rank above items that only matched via
+            // keyword/category, regardless of bonus stacking.
+            if (b.p !== a.p) return b.p - a.p;
+            // Drill-ins above leaves on the same title score, so a
+            // typed "setup" surfaces the Setup drill-in row above any
+            // Setup-category leaf.
             const aCat = a.item.isCategory ? 0 : 1;
             const bCat = b.item.isCategory ? 0 : 1;
             if (aCat !== bCat) return aCat - bCat;
+            // Kind: App > omarchy/navbar > TUI > Theme. This is where
+            // Apps win against omarchy/theme rows that share a title
+            // prefix (e.g. typing "aether" surfaces the Aether app
+            // ahead of "Aether Themes" and the aether theme entry).
+            const ka = root.kindRank(a.item);
+            const kb = root.kindRank(b.item);
+            if (ka !== kb) return ka - kb;
+            // Within the same kind, fall back to total score (keyword
+            // and category bonuses) and finally alpha.
+            if (b.s !== a.s) return b.s - a.s;
             return a.item.title.localeCompare(b.item.title);
         });
         const lim = Math.min(scored.length, cap);
@@ -947,6 +1016,7 @@ Item {
                 spacing: 12
 
                 Omni.HeaderBar {
+                    id: headerBar
                     omni: root
                     processes: processes
                     themes: themes
@@ -979,7 +1049,7 @@ Item {
                     visible: !root.quickMode
                     width: parent.width
                     height: visible
-                        ? Math.max(60, card.height - 34 - 43 - 34 - 22 - 12 * 5)
+                        ? Math.max(60, card.height - 34 - headerBar.height - 34 - 12 * 4)
                         : 0
                     clip: true
 
@@ -1028,9 +1098,6 @@ Item {
                     }
                 }
 
-                Rectangle { width: parent.width; height: 1; color: root.sep }
-
-                Omni.Footer { omni: root }
             }
         }
     }
