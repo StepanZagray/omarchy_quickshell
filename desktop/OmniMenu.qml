@@ -747,15 +747,9 @@ Item {
         WlrLayershell.keyboardFocus: root.visible_ ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
         property real reveal: root.visible_ ? 1 : 0
-        // Open is instant (no fade-in) so SUPER+SPACE paints the palette
-        // on the very next frame. Close keeps a short eased fade so the
-        // dismissal still reads as a deliberate motion instead of a pop.
-        Behavior on reveal {
-            NumberAnimation {
-                duration: root.visible_ ? 0 : 70
-                easing.type: Easing.InQuad
-            }
-        }
+        // Open and close are both instant: SUPER+SPACE paints the palette on
+        // the very next frame, and dismissal drops it the same frame with no
+        // fade or scale-out lag.
 
         // Backdrop dim — fades the desktop behind the palette along the
         // same reveal curve as the card scale, so open/close stays one
