@@ -759,7 +759,14 @@ Item {
     property bool systemVisible: false
     function openSystem() {
         if (root.systemAnchorItem) root.anchorPopupTo(root.systemAnchorItem);
+        refreshSystemStats();
         root.systemVisible = true;
+    }
+
+    function refreshSystemStats() {
+        if (systemProbe.running) return;
+        systemProbe.running = false;
+        systemProbe.running = true;
     }
 
     function runSunset(verb) {
@@ -1052,16 +1059,19 @@ Item {
     }
 
     // ---------- Generic launcher ----------
-    Process { id: runner; running: false }
+    Process { id: runner; running: false
+        stderr: StdioCollector { onStreamFinished: if (this.text) console.log("[RUN-DIAG stderr] " + this.text) }
+    }
     function run(cmd) {
+        console.log("[RUN-DIAG] " + cmd);
         runner.command = ["bash", "-lc", cmd];
         runner.running = false;
         runner.running = true;
     }
 
-    // ---------- Telemetry (1 Hz) ----------
+    // ---------- System stats (on demand) ----------
     Process {
-        id: tel
+        id: systemProbe
         running: false
         command: ["bash", "-lc",
             "read _ a b c d _ < <(grep '^cpu ' /proc/stat); "
@@ -1070,7 +1080,24 @@ Item {
             + "du=$(( (e+f+g) - (a+b+c) )); dt=$(( (e+f+g+h) - (a+b+c+d) )); "
             + "cpu=$(( dt>0 ? du*100/dt : 0 )); "
             + "mem=$(awk '/MemTotal/{t=$2}/MemAvailable/{m=$2}END{printf \"%d\",(t-m)*100/t}' /proc/meminfo); "
-            + "bat=0; bst=Unknown; pwr=0; "
+            + "printf '%d|%d' \"$cpu\" \"$mem\""]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const p = this.text.split("|");
+                if (p.length === 2) {
+                    root.cpuVal = parseInt(p[0]) || 0;
+                    root.memVal = parseInt(p[1]) || 0;
+                }
+            }
+        }
+    }
+
+    // ---------- Telemetry (1 Hz) ----------
+    Process {
+        id: tel
+        running: false
+        command: ["bash", "-lc",
+            "bat=0; bst=Unknown; pwr=0; "
             + "if [ -d /sys/class/power_supply/BAT0 ]; then "
             + "  bat=$(cat /sys/class/power_supply/BAT0/capacity 2>/dev/null || echo 0); "
             + "  bst=$(cat /sys/class/power_supply/BAT0/status 2>/dev/null || echo Unknown); "
@@ -1081,20 +1108,18 @@ Item {
             + "  pwr=$(cat /sys/class/power_supply/BAT1/power_now 2>/dev/null || echo 0); "
             + "fi; "
             + "pwr=${pwr#-}; "  // some kernels prefix '-' on discharge; magnitude is enough, sign comes from $bst
-            + "printf '%d|%d|%d|%s|%s|%s|%s|%s|%d' "
-            + "  \"$cpu\" \"$mem\" \"$bat\" \"$bst\" "
+            + "printf '%d|%s|%s|%s|%s|%s|%d' "
+            + "  \"$bat\" \"$bst\" "
             + "  \"$(date +%H)\" \"$(date +%M)\" \"$(date +%d)\" \"$(date +%b | tr a-z A-Z)\" \"$pwr\""]
         stdout: StdioCollector {
             onStreamFinished: {
                 const p = this.text.split("|");
-                if (p.length === 9) {
-                    root.cpuVal = parseInt(p[0]) || 0;
-                    root.memVal = parseInt(p[1]) || 0;
-                    root.batVal = parseInt(p[2]) || 0;
-                    root.batState = p[3] || "Unknown";
-                    root.hh = p[4]; root.mm = p[5];
-                    root.dd = p[6]; root.mon = p[7];
-                    root.batPower = (parseInt(p[8]) || 0) / 1e6;
+                if (p.length === 7) {
+                    root.batVal = parseInt(p[0]) || 0;
+                    root.batState = p[1] || "Unknown";
+                    root.hh = p[2]; root.mm = p[3];
+                    root.dd = p[4]; root.mon = p[5];
+                    root.batPower = (parseInt(p[6]) || 0) / 1e6;
                 }
             }
         }

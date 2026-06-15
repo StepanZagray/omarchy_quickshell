@@ -15,11 +15,14 @@ Item {
     property bool active: false
     property bool present: true
     property bool strong: false
+    property bool borderless: false
     property color accentColor: root.ink
     property string fontFamily: root.mono
     property string iconFamily: root.mono
     property int fontSize: 11
     property int iconSize: fontSize + 1
+    property int iconYOffset: -1
+    property int textYOffset: 0
     property int minWidth: 24
     property int maxWidth: 180
 
@@ -61,6 +64,7 @@ Item {
         anchors.fill: parent
         anchors.margins: 3
         radius: 0
+        visible: !cell.borderless
         color: cell.active ? cell.activeFill
               : (mouse.containsMouse ? cell.hoverFill : "transparent")
         border.width: cell.active || mouse.containsMouse || cell.strong ? 1 : 0
@@ -80,7 +84,7 @@ Item {
 
             Text {
                 anchors.centerIn: parent
-                anchors.verticalCenterOffset: -1
+                anchors.verticalCenterOffset: cell.iconYOffset
                 visible: cell.glyph !== "" && !cell.hasImageIcon
                 text: cell.glyph
                 color: cell.displayColor
@@ -118,25 +122,31 @@ Item {
             }
         }
 
-        Text {
-            id: label
+        Item {
             width: cell.text.length > 0
-                   ? Math.min(implicitWidth, Math.max(0, cell.width - 14 - cell.iconSlotWidth - cell.iconGap))
+                   ? Math.min(label.implicitWidth, Math.max(0, cell.width - 14 - cell.iconSlotWidth - cell.iconGap))
                    : 0
             height: parent.height
             visible: cell.text.length > 0
-            text: cell.text
-            color: cell.displayColor
-            opacity: cell.present ? 1.0 : 0.55
-            elide: Text.ElideRight
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            font.family: cell.fontFamily
-            font.pixelSize: cell.fontSize
-            font.weight: cell.active || cell.strong ? Font.Medium : Font.Normal
-            font.letterSpacing: cell.strong ? 1.2 : 0.4
-            Behavior on color { ColorAnimation { duration: 120 } }
-            Behavior on opacity { NumberAnimation { duration: 120 } }
+
+            Text {
+                id: label
+                anchors.centerIn: parent
+                anchors.verticalCenterOffset: cell.textYOffset
+                width: parent.width
+                text: cell.text
+                color: cell.displayColor
+                opacity: cell.present ? 1.0 : 0.55
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                font.family: cell.fontFamily
+                font.pixelSize: cell.fontSize
+                font.weight: cell.active || cell.strong ? Font.Medium : Font.Normal
+                font.letterSpacing: cell.strong ? 1.2 : 0.4
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+            }
         }
     }
 

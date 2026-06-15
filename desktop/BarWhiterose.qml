@@ -20,8 +20,8 @@ PanelWindow {
     readonly property color surface: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.06)
     readonly property color musicAccent: root.green
 
-    readonly property string faviconSource:
-        "file://" + Quickshell.env("HOME") + "/Code/whiterose/site/assets/favicon-16.png"
+    readonly property string logoSource:
+        "file://" + Quickshell.env("HOME") + "/Code/whiterose/site/assets/logo.svg"
     readonly property string icoCpu: String.fromCodePoint(0xf035b)
 
     function trunc(s, n) {
@@ -114,8 +114,8 @@ PanelWindow {
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: 3
-                color: clockMouse.containsMouse ? wr.surface : "transparent"
-                border.width: clockMouse.containsMouse ? 1 : 0
+                color: "transparent"
+                border.width: 0
                 border.color: wr.lineStrong
             }
             Text {
@@ -161,8 +161,9 @@ PanelWindow {
 
             WhiteRoseCell {
                 root: wr.root
-                imageSource: wr.faviconSource
+                imageSource: wr.logoSource
                 tooltip: "Menu"
+                borderless: true
                 minWidth: 28
                 maxWidth: 28
                 iconSize: 14
@@ -174,16 +175,34 @@ PanelWindow {
 
             Repeater {
                 model: 10
-                delegate: WhiteRoseCell {
+                delegate: Item {
+                    id: wsDot
                     required property int index
-                    root: wr.root
                     readonly property int wsId: index + 1
-                    text: String(wsId).padStart(2, "0")
-                    active: wr.root.activeWs === wsId
-                    present: wr.root.existingWs.indexOf(wsId) !== -1
-                    minWidth: 26
-                    fontSize: 10
-                    onActivated: wr.root.run("hyprctl dispatch workspace " + wsId)
+                    readonly property bool active: wr.root.activeWs === wsId
+                    readonly property bool present: wr.root.existingWs.indexOf(wsId) !== -1
+
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.preferredWidth: 16
+                    Layout.preferredHeight: wr.root.barHeight
+                    opacity: wsMouse.containsMouse || present ? 1.0 : 0.34
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: wsDot.active ? 7 : 4
+                        height: width
+                        radius: width / 2
+                        color: wsDot.active ? wr.text : wr.faint
+                        Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                    }
+
+                    MouseArea {
+                        id: wsMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: wr.root.run("hyprctl dispatch workspace " + wsDot.wsId)
+                    }
                 }
             }
 
@@ -193,14 +212,16 @@ PanelWindow {
                 root: wr.root
                 visible: wr.root.musicTitle.length > 0
                 glyph: wr.root.musicPlaying ? wr.root.icoMusic : wr.root.icoPause
-                text: wr.trunc(wr.root.musicTitle, 18)
                 tooltip: wr.root.musicArtist.length > 0
                          ? wr.root.musicTitle + " - " + wr.root.musicArtist
                          : wr.root.musicTitle
                 strong: true
+                borderless: true
                 accentColor: wr.musicAccent
-                minWidth: 96
-                maxWidth: 190
+                iconSize: 10
+                iconYOffset: 0
+                minWidth: 28
+                maxWidth: 28
                 onActivated: wr.root.musicToggle()
                 onRightActivated: wr.root.musicNext()
             }
@@ -212,14 +233,14 @@ PanelWindow {
                 root: wr.root
                 glyph: wr.root.weatherUnavailable ? "?"
                        : (wr.root.weatherLoaded ? wr.root.weatherIcon : ".")
-                text: wr.root.weatherLoaded ? Math.round(wr.root.weatherTempC) + "C" : "--"
                 tooltip: wr.root.weatherUnavailable
                          ? "Weather offline"
                          : (wr.root.weatherLoaded
                             ? wr.root.weatherDesc + " - " + Math.round(wr.root.weatherTempC) + "C"
                             : "Weather...")
-                minWidth: 50
-                maxWidth: 90
+                borderless: true
+                minWidth: 28
+                maxWidth: 28
                 ink: wr.root.weatherUnavailable ? wr.muted : wr.text
                 onActivated: {
                     if (wr.root.weatherVisible) wr.root.weatherVisible = false;
@@ -234,10 +255,11 @@ PanelWindow {
                 id: systemMod
                 root: wr.root
                 glyph: wr.icoCpu
-                text: Math.round(wr.root.cpuVal) + "/" + Math.round(wr.root.memVal)
                 tooltip: "System - CPU " + Math.round(wr.root.cpuVal) + "% / MEM " + Math.round(wr.root.memVal) + "%"
                 strong: wr.root.cpuVal > 80 || wr.root.memVal > 85
-                minWidth: 62
+                borderless: true
+                minWidth: 28
+                maxWidth: 28
                 onActivated: {
                     if (wr.root.systemVisible) wr.root.systemVisible = false;
                     else wr.root.openSystem();
@@ -247,7 +269,6 @@ PanelWindow {
             WhiteRoseCell {
                 root: wr.root
                 glyph: wr.root.btIcon
-                text: wr.root.btPowered ? (wr.root.btCount > 0 ? String(wr.root.btCount) : "ON") : "OFF"
                 tooltip: {
                     if (!wr.root.btPowered) return "Bluetooth off";
                     return wr.root.btCount > 0
@@ -255,17 +276,14 @@ PanelWindow {
                         : "Bluetooth on";
                 }
                 ink: wr.root.btPowered ? wr.text : wr.muted
-                minWidth: 46
+                borderless: true
+                minWidth: 28
+                maxWidth: 28
                 onActivated: wr.root.run("omarchy-launch-bluetooth")
             }
             WhiteRoseCell {
                 root: wr.root
                 glyph: wr.root.netIcon
-                text: {
-                    if (wr.root.netKind === "eth") return "ETH";
-                    if (wr.root.netKind === "wifi") return String(wr.root.wifiSignal);
-                    return "OFF";
-                }
                 tooltip: {
                     if (wr.root.netKind === "eth") return "Ethernet";
                     if (wr.root.netKind === "wifi") {
@@ -275,18 +293,21 @@ PanelWindow {
                     return "Offline";
                 }
                 ink: wr.root.netKind === "none" ? wr.muted : wr.text
-                minWidth: 50
+                borderless: true
+                minWidth: 28
+                maxWidth: 28
                 onActivated: wr.root.run("omarchy-launch-wifi")
             }
             WhiteRoseCell {
                 root: wr.root
                 glyph: wr.root.audioIcon
-                text: wr.root.audioMuted ? "MUTE" : String(wr.root.audioVol)
                 tooltip: wr.root.audioMuted
                          ? "Audio muted - " + wr.root.audioVol + "%"
                          : "Audio " + wr.root.audioVol + "%"
                 strong: wr.root.audioMuted
-                minWidth: 58
+                borderless: true
+                minWidth: 28
+                maxWidth: 28
                 onActivated: wr.root.run("omarchy-launch-audio")
                 onRightActivated: wr.root.run("pamixer -t")
             }
@@ -294,27 +315,30 @@ PanelWindow {
                 root: wr.root
                 visible: wr.root.omarchyUpdateAvailable
                 glyph: wr.root.icoUpdate
-                text: "UPD"
                 tooltip: wr.root.omarchyLatestTag
                          ? "Omarchy update available - " + wr.root.omarchyLatestTag
                          : "Omarchy update available"
                 strong: true
-                minWidth: 34
+                borderless: true
+                minWidth: 28
+                maxWidth: 28
                 onActivated: wr.root.openOmarchyUpdate()
             }
             WhiteRoseCell {
                 root: wr.root
                 glyph: wr.root.batteryIcon()
-                text: wr.root.batVal + "%"
                 tooltip: wr.batteryTip()
                 strong: wr.root.batVal <= 10
-                minWidth: 56
+                borderless: true
+                minWidth: 28
+                maxWidth: 28
                 onActivated: wr.root.run("omarchy-menu power")
             }
             WhiteRoseCell {
                 root: wr.root
                 text: wr.root.edgeArrow()
                 tooltip: "Move bar"
+                borderless: true
                 minWidth: 28
                 onActivated: wr.root.cycleBarEdge()
             }
@@ -330,8 +354,9 @@ PanelWindow {
 
         WhiteRoseCell {
             root: wr.root
-            imageSource: wr.faviconSource
+            imageSource: wr.logoSource
             tooltip: "Menu"
+            borderless: true
             minWidth: 20
             maxWidth: 20
             iconSize: 13
@@ -343,16 +368,34 @@ PanelWindow {
 
         Repeater {
             model: 10
-            delegate: WhiteRoseCell {
+            delegate: Item {
+                id: wsDotV
                 required property int index
-                root: wr.root
                 readonly property int wsId: index + 1
-                text: String(wsId).padStart(2, "0")
-                active: wr.root.activeWs === wsId
-                present: wr.root.existingWs.indexOf(wsId) !== -1
-                minWidth: 20
-                fontSize: 9
-                onActivated: wr.root.run("hyprctl dispatch workspace " + wsId)
+                readonly property bool active: wr.root.activeWs === wsId
+                readonly property bool present: wr.root.existingWs.indexOf(wsId) !== -1
+
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: wr.root.barHeight
+                Layout.preferredHeight: 14
+                opacity: wsMouseV.containsMouse || present ? 1.0 : 0.34
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: wsDotV.active ? 7 : 4
+                    height: width
+                    radius: width / 2
+                    color: wsDotV.active ? wr.text : wr.faint
+                    Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                }
+
+                MouseArea {
+                    id: wsMouseV
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: wr.root.run("hyprctl dispatch workspace " + wsDotV.wsId)
+                }
             }
         }
 
@@ -367,8 +410,8 @@ PanelWindow {
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: 3
-                color: clockMouseV.containsMouse ? wr.surface : "transparent"
-                border.width: clockMouseV.containsMouse ? 1 : 0
+                color: "transparent"
+                border.width: 0
                 border.color: wr.lineStrong
             }
             Text {
@@ -409,9 +452,9 @@ PanelWindow {
             id: systemModV
             root: wr.root
             glyph: wr.icoCpu
-            text: "SY"
             tooltip: "System - CPU " + Math.round(wr.root.cpuVal) + "% / MEM " + Math.round(wr.root.memVal) + "%"
             strong: wr.root.cpuVal > 80 || wr.root.memVal > 85
+            borderless: true
             minWidth: 20
             fontSize: 9
             onActivated: {
@@ -423,13 +466,13 @@ PanelWindow {
         WhiteRoseCell {
             root: wr.root
             glyph: wr.root.netIcon
-            text: wr.root.netKind === "none" ? "NO" : "NW"
             tooltip: {
                 if (wr.root.netKind === "eth") return "Ethernet";
                 if (wr.root.netKind === "wifi") return "Wi-Fi - " + (wr.root.wifiSsid || "(hidden)") + " - " + wr.root.wifiSignal + "%";
                 return "Offline";
             }
             ink: wr.root.netKind === "none" ? wr.muted : wr.text
+            borderless: true
             minWidth: 20
             fontSize: 9
             onActivated: wr.root.run("omarchy-launch-wifi")
@@ -437,11 +480,11 @@ PanelWindow {
         WhiteRoseCell {
             root: wr.root
             glyph: wr.root.audioIcon
-            text: wr.root.audioMuted ? "MU" : "AU"
             tooltip: wr.root.audioMuted
                      ? "Audio muted - " + wr.root.audioVol + "%"
                      : "Audio " + wr.root.audioVol + "%"
             strong: wr.root.audioMuted
+            borderless: true
             minWidth: 20
             fontSize: 9
             onActivated: wr.root.run("omarchy-launch-audio")
@@ -452,13 +495,13 @@ PanelWindow {
             root: wr.root
             glyph: wr.root.weatherUnavailable ? "?"
                    : (wr.root.weatherLoaded ? wr.root.weatherIcon : ".")
-            text: wr.root.weatherUnavailable ? "?" : "WX"
             tooltip: wr.root.weatherUnavailable
                      ? "Weather offline"
                      : (wr.root.weatherLoaded
                         ? wr.root.weatherDesc + " - " + Math.round(wr.root.weatherTempC) + "C"
                         : "Weather...")
             ink: wr.root.weatherUnavailable ? wr.muted : wr.text
+            borderless: true
             minWidth: 20
             fontSize: 9
             onActivated: {
@@ -470,9 +513,9 @@ PanelWindow {
         WhiteRoseCell {
             root: wr.root
             glyph: wr.root.batteryIcon()
-            text: String(wr.root.batVal)
             tooltip: wr.batteryTip()
             strong: wr.root.batVal <= 10
+            borderless: true
             minWidth: 20
             fontSize: 9
             onActivated: wr.root.run("omarchy-menu power")
@@ -484,6 +527,7 @@ PanelWindow {
             root: wr.root
             text: wr.root.edgeArrow()
             tooltip: "Move bar"
+            borderless: true
             minWidth: 20
             fontSize: 11
             onActivated: wr.root.cycleBarEdge()

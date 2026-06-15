@@ -61,10 +61,14 @@ Item {
     }
 
     MouseArea {
+        // Reach 2px into the 4px grid gap on every side so there are no dead
+        // strips between adjacent numbers — each kanji owns the space up to
+        // the midpoint between it and its neighbour, making clicks forgiving.
         anchors.fill: parent
+        anchors.margins: -2
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onEntered: bloom.fire(mouseX, mouseY)
-        onClicked: wsCell.activated()
+        onEntered: { console.log("[WS-DIAG hover] ws=" + wsCell.wsId); bloom.fire(mouseX, mouseY); }
+        onClicked: { console.log("[WS-DIAG click] ws=" + wsCell.wsId); wsCell.activated(); }
     }
 }

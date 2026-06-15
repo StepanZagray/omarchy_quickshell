@@ -66,7 +66,7 @@ PanelWindow {
     property real _reveal: revealed ? 1 : 0
     Behavior on _reveal {
         NumberAnimation {
-            duration: card.revealed ? 220 : 140
+            duration: card.plain ? 0 : (card.revealed ? 220 : 140)
             easing.type: card.revealed ? Easing.OutCubic : Easing.InCubic
         }
     }
@@ -115,8 +115,8 @@ PanelWindow {
                 if (card.anchorEdge === "bottom") return surface.height;
                 return Math.max(0, Math.min(surface.height, card.anchorBarY - surface.y));
             }
-            xScale: card._reveal
-            yScale: card._reveal
+            xScale: card.plain ? 1 : card._reveal
+            yScale: card.plain ? 1 : card._reveal
         }
 
         // Swallow clicks so the dismiss MouseArea doesn't fire on body taps.

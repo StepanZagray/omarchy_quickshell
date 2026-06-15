@@ -420,7 +420,7 @@ PanelWindow {
                     label: bar.root.indexKanji(index + 1)
                     active: bar.root.activeWs === (index + 1)
                     present: bar.root.existingWs.indexOf(index + 1) !== -1
-                    onActivated: bar.root.run("hyprctl dispatch workspace " + (index + 1))
+                    onActivated: { console.log("[WS-ACT fired] ws=" + (index + 1) + " runType=" + (typeof (bar.root && bar.root.run))); bar.root.run("hyprctl dispatch workspace " + (index + 1)); }
                 }
             }
 
