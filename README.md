@@ -4,7 +4,7 @@ Personal [Quickshell](https://quickshell.outfoxxed.me) configs built for [omarch
 
 
 
-https://github.com/user-attachments/assets/a5bf641b-ccff-41bd-a14c-619ed5c3321a
+
 
 
 
