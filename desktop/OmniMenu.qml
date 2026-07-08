@@ -3,9 +3,10 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 import Quickshell.Hyprland
-import "Data.js" as Data
+import "data/Data.js" as Data
 import "omni" as Omni
 import "omni/Tiles.js" as Tiles
+import "services"
 
 // Omni-menu palette. Fuses installed apps (.desktop scan) with every
 // `omarchy-menu` action, scored against title, category, and per-entry
@@ -29,13 +30,9 @@ Item {
     id: root
 
     required property var theme
-    // Navbar instance handed in from shell.qml. Used by Quick mode to
-    // bind live telemetry (battery, audio, network, bluetooth, weather,
-    // …) into the tile grid. Optional so OmniMenu can still load without
-    // a navbar (e.g. headless config); Quick tiles fall back to "—" then.
-    // Named `navbar` to avoid colliding with the existing `nav: []`
-    // category-row array further down.
-    property var navbar: null
+    // Desktop shell instance from shell.qml. Quick mode reads live telemetry
+    // from it; when absent (headless config) tiles fall back to "—".
+    property var desktop: null
 
     readonly property color paper:   theme.paper
     readonly property color ink:     theme.ink
@@ -65,11 +62,9 @@ Item {
     readonly property int cornerRadius: theme.cornerRadius
 
     // Sources that feed `allItems`. AppScan reads .desktop files;
-    // NavbarApps probes the navbar shell for its IpcHandler widgets and
-    // surfaces only the ones it actually exposes (so users on a
-    // navbar-less setup see nothing instead of broken rows).
+    // DesktopApps surfaces shell popup widgets as palette rows.
     AppScan { id: appScan }
-    NavbarApps { id: navbarApps }
+    DesktopApps { id: desktopApps }
     Tuis { id: tuis }
     readonly property alias appsLoaded: appScan.loaded
 
@@ -164,8 +159,8 @@ Item {
         // sibling Navbar wires up): return an empty snapshot but do NOT
         // store it, so the cached previous-good values survive the gap
         // and the close-fade never flashes blank tiles.
-        if (!root.navbar) return ({});
-        const dyn = Tiles.buildDyn(root.navbar);
+        if (!root.desktop) return ({});
+        const dyn = Tiles.buildDyn(root.desktop);
         root._quickTilesDynCache = dyn;
         return dyn;
     }
@@ -320,7 +315,7 @@ Item {
         root.selectedIndex = 0;
         root.categoryFilter = "";
         root.visible_ = true;
-        navbarApps.probe();
+        desktopApps.probe();
     }
     function close() {
         root.visible_ = false;
@@ -373,7 +368,7 @@ Item {
     // 200+ entry array on unrelated property touches.
     property var omarchy: []
     property var nav: []
-    readonly property var allItems: root.omarchy.concat(appScan.apps).concat(navbarApps.items).concat(tuis.items).concat(themes.items)
+    readonly property var allItems: root.omarchy.concat(appScan.apps).concat(desktopApps.items).concat(tuis.items).concat(themes.items)
 
     // ---------- Launcher ----------
     // Matches omarchy's launch convention (see omarchy-launch-or-focus):
@@ -781,7 +776,7 @@ Item {
             // panel.
             width: root.previewActive ? 1000 : 640
             Behavior on width {
-                NumberAnimation { duration: 60; easing.type: Easing.OutCubic }
+                NumberAnimation { duration: 60; easing.type: Easing.InOutCubic }
             }
             // Cap the card so it never exceeds the screen even on small
             // displays; cardCol implicitHeight covers the search + list +

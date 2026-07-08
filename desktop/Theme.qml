@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "Palette.js" as Palette
+import "data/Palette.js" as Palette
 
 // `seal` rides `driftAmount` (200ms rise, 2.8s taper) so each theme swap
 // reads as a breath rather than a hard cut. The 1.55s lead-in lets
@@ -9,14 +9,18 @@ import "Palette.js" as Palette
 Item {
     id: theme
 
-    readonly property string colorsPath: Quickshell.env("HOME") + "/.config/omarchy/current/theme/colors.toml"
+    readonly property string paletteReadCommand:
+        "theme_name=$(cat \"$HOME/.config/omarchy/current/theme.name\" 2>/dev/null); "
+        + "colors_file=\"$HOME/.config/omarchy/themes/$theme_name/colors.toml\"; "
+        + "[ -f \"$colors_file\" ] || colors_file=\"$HOME/.config/omarchy/current/theme/colors.toml\"; "
+        + "cat \"$colors_file\" 2>/dev/null"
 
     // Our own persisted round/sharp toggle. Flipped from the omni menu
     // (or any client) via the `corners` IpcHandler below. We don't read
     // omarchy's walker.css because that file is rewritten by a buggy
     // script and would drift out of sync with what we actually rendered.
     readonly property string cornerStatePath: Quickshell.env("HOME") + "/.local/state/quickshell-desktop/corners"
-    property int cornerRadius: 0
+    property int cornerRadius: 6
     readonly property bool round: cornerRadius > 0
 
     function setCorners(mode) {
@@ -47,10 +51,14 @@ Item {
         sealRaw.a
     )
 
-    readonly property string serif: "serif"
     readonly property string mono:  "JetBrainsMono Nerd Font"
+    readonly property string serif: mono
 
-    readonly property color bg:     Qt.rgba(paper.r, paper.g, paper.b, 0.94)
+    // Standard motion duration for popups, OSD, frame morph, tooltips, and
+    // other shell reveal/fade surfaces. Pair with Easing.InOutCubic.
+    property int animationDuration: 200
+
+    readonly property color bg:     Qt.rgba(paper.r, paper.g, paper.b, 0.70)
     readonly property color fg:     ink
     readonly property color muted:  sumi
     readonly property color accent: seal
@@ -64,14 +72,16 @@ Item {
     // startup FileView read.
     property string lastAppliedName: ""
 
-    // watchChanges: false — `omarchy theme set` does an atomic rm+mv on
-    // the theme dir, which would race an inotify watch. The hook tells us
-    // when to reload instead.
-    FileView {
-        id: paletteFile
-        path: theme.colorsPath
-        watchChanges: false
-        onLoaded: Palette.apply(theme, Palette.parse(paletteFile.text()))
+    // Prefer the named theme directory over the copied current/theme
+    // snapshot, so manual edits to ~/.config/omarchy/themes/<name>/colors.toml
+    // are picked up on Quickshell startup and IPC reload.
+    Process {
+        id: paletteReader
+        running: true
+        command: ["bash", "-lc", theme.paletteReadCommand]
+        stdout: StdioCollector {
+            onStreamFinished: Palette.apply(theme, Palette.parse(this.text))
+        }
     }
 
     // Local persistence: one-line file containing "round" or "sharp".
@@ -90,8 +100,8 @@ Item {
             }
         }
         onExited: function(code) {
-            // Missing file -> default sharp.
-            if (code !== 0) theme.cornerRadius = 0;
+            // Missing file -> match Hypr's window rounding.
+            if (code !== 0) theme.cornerRadius = 6;
         }
     }
 
@@ -116,13 +126,13 @@ Item {
             target: theme; property: "driftAmount"
             from: 0; to: 1
             duration: 200
-            easing.type: Easing.OutQuad
+            easing.type: Easing.InOutCubic
         }
         NumberAnimation {
             target: theme; property: "driftAmount"
             to: 0
             duration: 2800
-            easing.type: Easing.OutCubic
+            easing.type: Easing.InOutCubic
         }
     }
 
@@ -140,7 +150,8 @@ Item {
             }
         }
         function reload(): void {
-            paletteFile.reload();
+            paletteReader.running = false;
+            paletteReader.running = true;
             driftDelay.restart();
         }
     }

@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import ".."
+import "../quick"
 
 // Quick-mode container: tile grid on the left, optional detail panel
 // on the right when a tile is expanded. The grid compresses to a
@@ -67,9 +67,9 @@ Item {
                                     : Qt.rgba(qc.omni.ink.r, qc.omni.ink.g, qc.omni.ink.b, 0.03)
                         border.color: tileSlot.selected ? qc.omni.seal : qc.omni.sep
                         border.width: tileSlot.selected ? 2 : 1
-                        Behavior on color        { ColorAnimation  { duration: 50 } }
-                        Behavior on border.color { ColorAnimation  { duration: 50 } }
-                        Behavior on border.width { NumberAnimation { duration: 50 } }
+                        Behavior on color        { ColorAnimation  { duration: 50; easing.type: Easing.InOutCubic } }
+                        Behavior on border.color { ColorAnimation  { duration: 50; easing.type: Easing.InOutCubic } }
+                        Behavior on border.width { NumberAnimation { duration: 50; easing.type: Easing.InOutCubic } }
                     }
 
                     Column {
@@ -175,7 +175,7 @@ Item {
         height: visible ? Math.min(_wantHeight, _maxHeight) : 0
         clip: true
         Behavior on height {
-            NumberAnimation { duration: 60; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: 60; easing.type: Easing.InOutCubic }
         }
 
         readonly property var t: qc.omni.expandedTile
@@ -193,18 +193,17 @@ Item {
         // based on `tKey`. Each body owns its own controls (sliders,
         // lists) and may emit `close` to dismiss OmniMenu after an
         // action that takes focus away.
-        Component { id: batteryBodyComp;     QuickBatteryBody     { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: audioBodyComp;       QuickAudioBody       { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: wifiBodyComp;        QuickWifiBody        { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: btBodyComp;          QuickBluetoothBody   { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: weatherBodyComp;     QuickWeatherBody     { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: displayBodyComp;     QuickDisplayBody     { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: aetherBodyComp;      QuickAetherBody      { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: cpuBodyComp;         QuickCpuBody         { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: calendarBodyComp;    QuickCalendarBody    { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: screenshotsBodyComp; QuickScreenshotsBody { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: videosBodyComp;      QuickVideosBody      { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
-        Component { id: powerBodyComp;       QuickPowerBody       { root: detailPanel.omni; nav: detailPanel.omni.navbar } }
+        Component { id: batteryBodyComp;     QuickBatteryBody     { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: audioBodyComp;       QuickAudioBody       { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: wifiBodyComp;        QuickWifiBody        { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: btBodyComp;          QuickBluetoothBody   { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: displayBodyComp;     QuickDisplayBody     { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: aetherBodyComp;      QuickAetherBody      { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: cpuBodyComp;         QuickCpuBody         { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: calendarBodyComp;    QuickCalendarBody    { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: screenshotsBodyComp; QuickScreenshotsBody { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: videosBodyComp;      QuickVideosBody      { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
+        Component { id: powerBodyComp;       QuickPowerBody       { root: detailPanel.omni; shell: detailPanel.omni.desktop } }
 
         // Header (always visible at the top of the panel)
         RowLayout {
@@ -299,7 +298,6 @@ Item {
                         case "audio":       return audioBodyComp;
                         case "network":     return wifiBodyComp;
                         case "bluetooth":   return btBodyComp;
-                        case "weather":     return weatherBodyComp;
                         case "display":     return displayBodyComp;
                         case "aether":      return aetherBodyComp;
                         case "cpu":         return cpuBodyComp;

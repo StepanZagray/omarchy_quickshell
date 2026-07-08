@@ -1,5 +1,5 @@
 import QtQuick
-import "../Data.js" as Data
+import "../data/Data.js" as Data
 import "Format.js" as Fmt
 
 // Right-side preview pane. Shown when one of the preview-bearing modes

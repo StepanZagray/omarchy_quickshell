@@ -14,9 +14,6 @@ var base = [
       action: "omarchy-launch-wifi" },
     { key: "bluetooth",   keywords: "bluetooth bt pair device headset speaker keyboard",
       action: "omarchy-launch-bluetooth" },
-    { key: "weather",     keywords: "weather forecast temperature wttr rain sun wind",
-      action: "qs -c desktop ipc call weather toggle",
-      longAction: "qs -c desktop ipc call weather refresh" },
     { key: "display",     keywords: "display monitor brightness warmth gamma night light blue temperature dim",
       action: "qs -c desktop ipc call display toggle",
       longAction: "qs -c desktop ipc call display reset" },
@@ -80,14 +77,6 @@ function buildDyn(n) {
             sub: !n.btPowered ? "OFF"
                               : (n.btCount > 0 ? n.btCount + " CONN" : "ON"),
             tone: !n.btPowered ? n.inkDeep : n.ink
-        },
-        weather: {
-            glyph: n.weatherUnavailable ? "?"
-                 : (n.weatherLoaded ? n.weatherIcon : "·"),
-            label: "WEATHER",
-            sub: n.weatherUnavailable ? "OFFLINE"
-                 : (n.weatherLoaded ? Math.round(n.weatherTempC) + "°C" : "…"),
-            tone: n.weatherUnavailable ? n.inkDeep : n.ink
         },
         display: {
             glyph: n.icoDisplay,

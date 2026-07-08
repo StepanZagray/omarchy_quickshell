@@ -24,7 +24,7 @@ Reload the Hyprland session (or run `omarchy-hook post-boot`) and the bar appear
 
 ## Surfaces
 
-The palette ships two `GlobalShortcut`s, registered as `quickshell:palette-toggle` and `quickshell:palette-quick` (bind them globally in Hyprland to skip the `qs` client fork on the hot path). `palette-quick` opens pre-pivoted to the Quick-mode tile grid (battery, audio, wifi, bluetooth, weather, display, aether, cpu, calendar, screenshots, videos, power).
+The palette ships two `GlobalShortcut`s, registered as `quickshell:palette-toggle` and `quickshell:palette-quick` (bind them globally in Hyprland to skip the `qs` client fork on the hot path). `palette-quick` opens pre-pivoted to the Quick-mode tile grid (battery, audio, wifi, bluetooth, display, aether, cpu, calendar, screenshots, videos, power).
 
 Everything else goes through IPC:
 
@@ -34,7 +34,6 @@ qs -c desktop ipc call palette openCategory Quick  # palette pinned to Quick mod
 qs -c desktop ipc call screenshots toggle    # screenshots browser
 qs -c desktop ipc call videos toggle         # video browser
 qs -c desktop ipc call display toggle        # display sliders
-qs -c desktop ipc call weather toggle        # weather popup
 qs -c desktop ipc call aether toggle         # aether blueprint picker
 qs -c desktop ipc call calendar toggle       # calendar
 ```
@@ -45,29 +44,29 @@ The navbar omarchy/menu button calls `toggle()` on the sibling palette in-proces
 
 | Component | What it does |
 | --- | --- |
-| Bar | Kanji workspace markers, telemetry (cpu, mem, bt, wifi, audio, battery), centred clock, click-through popups for calendar, screenshots, videos, display, weather, aether blueprints. |
+| Bar | Numeric workspace markers, telemetry (cpu, mem, bt, wifi, audio, battery), centred clock, click-through popups for calendar, screenshots, videos, display, media, aether blueprints. |
 | Omni-menu | Full-screen command palette over installed apps and the omarchy-menu (Style, Setup, Install, Remove, Update, System, Toggle, Trigger, Capture, Share, Learn), file search, GitHub repo search, processes, theme picker, plus Quick-mode tile grid, tldr lookup (`$`), and local Ollama chat (`?`). |
-| Theme | Shared live palette sourced from `~/.config/omarchy/current/theme/colors.toml`. Drift animation runs on theme swap so bar + palette breathe in sync. |
+| Theme | Shared live palette sourced from `~/.config/omarchy/current/theme/colors.toml`. Drift animation runs on theme swap so bar + palette breathe in sync. Shell surfaces share `animationDuration` (200ms) for reveal/fade motion. |
 
 ## Bar layout
 
 ```
 left   | omarchy | sep | ws1..ws10 |
 center | HH:MM |
-right  | weather | display | camera | filmstrip | sep | cpu | bt | wifi | audio | battery | edge |
+right  | media | sep | cpu | bt | wifi | audio | battery | edge |
 ```
 
 - Click the omarchy glyph to toggle the omni-menu palette. Right-click runs `xdg-terminal-exec`.
 - Click the clock to open the calendar popup.
-- Click a kanji to `hyprctl dispatch workspace N`.
-- Click weather for the forecast popup. Right-click force-refreshes.
+- Click a workspace number to `hyprctl dispatch workspace N`.
+- Click media for the media popup. Right-click skips to the next track.
 - Click display for warmth, brightness, gamma sliders + presets.
 - Click camera to browse `~/Pictures/screenshot-*.png`. Right-click captures a new one.
 - Click filmstrip to browse recent videos in `~/Videos`. Right-click opens the folder.
 - Click audio for `omarchy-launch-audio`. Right-click toggles mute.
 - Click battery for the power menu.
 - Click the edge arrow to cycle the bar between top, right, bottom, left.
-- Cycle bar faces with `qs -c desktop ipc call bar toggle`; jump to the plain White Rose face with `qs -c desktop ipc call bar whiterose`.
+- Cycle bar faces with `qs -c desktop ipc call bar toggle`; jump directly with `qs -c desktop ipc call bar zen` or `qs -c desktop ipc call bar hackerman`.
 
 ## Palette
 
@@ -98,7 +97,7 @@ The first character of the query can pivot the whole pane:
 
 ### Quick mode
 
-`ALT + SPACE` opens the palette pre-pivoted to a Samsung-style 4x3 tile grid: battery, audio, network, bluetooth, weather, display, aether, cpu, calendar, screenshots, videos, power. Each tile binds to live navbar telemetry so the panel paints with current state on the very first frame.
+`ALT + SPACE` opens the palette pre-pivoted to a quick tile grid: battery, audio, network, bluetooth, display, aether, cpu, calendar, screenshots, videos, power. Each tile binds to live navbar telemetry so the panel paints with current state on the very first frame.
 
 | Key | Action |
 | --- | --- |
@@ -140,7 +139,7 @@ Reads `~/.config/omarchy/current/theme/colors.toml` and remaps:
 | accent | info accent | `indigo` |
 | color1 | active marker, alerts | `seal` (drift-modulated) |
 
-Parsing lives in `Palette.js`:
+Parsing lives in `data/Palette.js`:
 
 - `parseAll(text)` returns every `key = "value"` pair from a colors.toml.
 - `mapKeys(raw)` renames the six keys this shell uses onto semantic slots.
@@ -212,16 +211,6 @@ dbus-monitor --session "type='signal',interface='org.omarchy.Theme',member='Chan
 
 `toggle`, `open`, `close`, and (where relevant) `refresh`, `reset`, `blank` are exposed on each target. `palette` also exposes `openCategory <name>` to pivot the palette into a drill-down on open. `qs -c desktop ipc show` lists everything. See [Surfaces](#surfaces) above for the common verbs.
 
-## Weather location
-
-Defaults to wttr.in's IP geolocation. Override by writing a single line to `~/.config/omarchy/weather/location`:
-
-```
-Oslo
-```
-
-Or any of: `City, Country` | `LHR` (IATA) | `94103` (zip) | `60.42,11.24` (lat,lon). Click the subtitle inside the weather popup to open the file in your editor; the bar re-fetches on save.
-
 ## App scan
 
 Apps are scanned once at startup via a single Python `configparser` pass (NoDisplay/Hidden filtered, `%U`/`%f` field codes stripped, deduped by name) across `~/.local/share/applications`, `/usr/share/applications`, Flatpak, and Snap. Trigger a rescan with `qs -c desktop ipc call palette refresh`.
@@ -230,7 +219,7 @@ App icons resolve via `Quickshell.iconPath()` for theme names and `file://` for 
 
 ## Adding palette entries
 
-Edit `omarchyItems` in `Data.js`. Each row is:
+Edit `omarchyItems` in `data/Data.js`. Each row is:
 
 ```js
 { title: "My Action", icon: "", category: "Style",
@@ -244,7 +233,24 @@ Edit `omarchyItems` in `Data.js`. Each row is:
 
 ## Customization
 
-Everything lives under `desktop/`. The palette is split between `OmniMenu.qml` (state, search, IPC, shortcuts, key handler, panel chrome) and the visual chunks in `omni/`:
+Everything lives under `desktop/`. `Desktop.qml` is the shell facade: the taskbar is `bar/Bar.qml`; bars and popups bind to `root.*`. State lives under `state/`, layer wiring under `shell/`.
+
+| Path | Owns |
+| --- | --- |
+| `Desktop.qml` | Shell facade, theme pass-through, icon constants, state wiring. |
+| `bar/` | Taskbar (`Bar`, `Module`, `Workspace`, …). |
+| `popups/` | Card-window surfaces and popup-only controls. |
+| `shell/OsdSurfaces.qml` | Per-monitor OSD toasts (volume, brightness, caps, mic, touchpad). |
+| `state/OsdState.qml` | OSD logic, pamixer/brightnessctl, auto-hide. |
+| `state/InputState.qml` | Keyboard layout tracking for the bar language indicator. |
+| `quick/` | Quick-mode detail bodies and quick-panel controls. |
+| `services/` | App scan, bookmarks/history, file/GitHub/process/theme/tldr/chat providers. |
+| `data/` | Static palette entries and theme-palette parsing helpers. |
+| `state/ChromeState.qml` | Bar edge, tooltip anchors, popup anchors, frame-widget geometry. |
+| `shell/DesktopSurfaces.qml` | Per-monitor bar/popup/shell surface construction. |
+| `shell/DesktopIpc.qml` | Desktop shell IPC targets. |
+
+The palette is split between `OmniMenu.qml` (state, search, IPC, shortcuts, key handler, panel chrome) and the visual chunks in `omni/`:
 
 | File | Owns |
 | --- | --- |
@@ -261,17 +267,40 @@ Common tweaks:
 
 | Want to change | Where |
 | --- | --- |
-| Bar height | `barHeight` in `Navbar.qml`. |
-| Workspace count | `Repeater { model: 10 ... }` in `Bar.qml`. |
-| Bar font | `mono` / `serif` in `Navbar.qml`. |
+| Bar height | `barHeight` in `Desktop.qml`. |
+| Workspace count | `Repeater { model: 10 ... }` in `bar/Bar.qml`. |
+| Bar font | `mono` / `serif` in `Desktop.qml`. |
 | Palette font | `mono` / `serif` in `OmniMenu.qml`. |
 | Palette result cap | `maxResults` in `OmniMenu.qml`. |
 | Score weights | `scPrefix`, `scTitle`, `scKw`, `scCat` in `OmniMenu.qml`. |
 | Quick-tile order / actions | `base` array in `omni/Tiles.js`. |
-| Telemetry interval | `Timer { interval: ... }` blocks in `Navbar.qml`. |
+| Telemetry interval | `Timer { interval: ... }` blocks in the matching `state/*State.qml`. |
 | Drift animation | `driftDelay` / `driftAnim` in `Theme.qml`. |
+| Shell motion (popups, OSD, tooltips) | `animationDuration` in `Theme.qml` — use with `Easing.InOutCubic`; see [extend.md](./extend.md#shell-motion). |
 
 Quickshell hot-reloads on save, so edits show up live.
+
+## OSD
+
+Volume and brightness keys are wired in `~/.config/hypr/bindings.conf` to `qs -c desktop ipc call osd …`. Caps lock is detected automatically. Keyboard layout is shown in the bar when multiple layouts are configured (`us,ua` in `hypr/input.conf`).
+
+| Kind | Trigger | Display |
+| --- | --- | --- |
+| Volume | Multimedia keys | Bar + % |
+| Brightness | Display brightness keys | Bar + % |
+| Keyboard brightness | Kbd brightness keys | Bar + % |
+| Caps lock | Caps key (polled) | Status label |
+| Mic mute | `XF86AudioMicMute` | Status label |
+| Touchpad | Touchpad toggle keys | Status label |
+| Layout | Alt+Shift toggle | Bar indicator (US / UA) |
+
+```sh
+qs -c desktop ipc call osd volumeRaise
+qs -c desktop ipc call osd brightnessUp5
+qs -c desktop ipc call osd kbdBrightnessUp
+qs -c desktop ipc call osd micMuteToggle
+qs -c desktop ipc call osd touchpadToggle
+```
 
 ## Autostart
 
@@ -298,7 +327,6 @@ qs -n -d -c desktop
 | nmcli | Wifi signal strength when no ethernet is up. |
 | brightnessctl | Backlight slider in the display popup. |
 | hyprsunset | Color temperature and gamma in the display popup. |
-| jq, curl | Weather popup data fetch from wttr.in. |
 | yq | Provides `tomlq` for the theme-set hook's TOML-to-JSON pass. |
 | fd, gh | File search and GitHub repo search drill-downs (optional). |
 | dragon-drop | Drag-and-drop hand-off for the videos popup (optional, AUR). |
@@ -310,7 +338,7 @@ qs -n -d -c desktop
 | `Could not open config file at "desktop"` | Use `-c desktop`, not `-p desktop`. `-c` resolves to `~/.config/quickshell/desktop/shell.qml`. |
 | Palette doesn't appear on SUPER + SPACE | Confirm the keybind targets `qs -c desktop ipc call palette toggle`, not the old `omni-menu/toggle.sh`. |
 | Theme colours don't update on `omarchy theme set` | Check `~/.config/omarchy/current/theme.name` exists and is being rewritten. The desktop uses it as the reload trigger. |
-| Workspace switch feels laggy | Bump `wsProbe`'s `Timer { interval: ... }` from 500ms down to 150ms in `Navbar.qml`, or wire it to Hyprland's IPC socket. |
+| Workspace switch feels laggy | Bump `wsProbe`'s `Timer { interval: ... }` from 500ms down to 150ms in `state/WorkspaceState.qml`, or wire it to Hyprland's IPC socket. |
 | Qt version mismatch warning | `quickshell` was built against an older Qt minor. Rebuild the package against your current Qt. |
 
 ## License

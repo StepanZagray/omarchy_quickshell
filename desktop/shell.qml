@@ -1,9 +1,8 @@
 import QtQuick
 import Quickshell
 
-// Combined entry point: one Quickshell process hosting both the navbar and
-// the omni-menu command palette. Both share the same Theme instance, so an
-// omarchy theme swap propagates atomically to bar + popups + palette.
+// Combined entry point: one Quickshell process hosting the desktop shell
+// (bar, popups, OSD) and the omni-menu command palette.
 //
 // Launch with:
 //   qs -n -d -c desktop
@@ -18,10 +17,10 @@ ShellRoot {
 
     Theme { id: theme }
 
-    Navbar {
-        id: nav
+    Desktop {
+        id: desktop
         theme: theme
         onPaletteToggleRequested: omni.toggle()
     }
-    OmniMenu { id: omni; theme: theme; navbar: nav }
+    OmniMenu { id: omni; theme: theme; desktop: desktop }
 }

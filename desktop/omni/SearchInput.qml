@@ -60,8 +60,8 @@ Item {
         SequentialAnimation on opacity {
             running: input.omni.visible_
             loops: Animation.Infinite
-            NumberAnimation { from: 1; to: 0.2; duration: 600; easing.type: Easing.InOutSine }
-            NumberAnimation { from: 0.2; to: 1; duration: 600; easing.type: Easing.InOutSine }
+            NumberAnimation { from: 1; to: 0.2; duration: 600; easing.type: Easing.InOutCubic }
+            NumberAnimation { from: 0.2; to: 1; duration: 600; easing.type: Easing.InOutCubic }
         }
     }
 }

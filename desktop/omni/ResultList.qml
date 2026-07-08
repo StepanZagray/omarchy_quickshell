@@ -41,7 +41,7 @@ Item {
                 color: row.isSelected ? rl.omni.rowSel
                                       : rowMouse.containsMouse ? rl.omni.rowHi
                                                                : "transparent"
-                Behavior on color { ColorAnimation { duration: 40 } }
+                Behavior on color { ColorAnimation { duration: 40; easing.type: Easing.InOutCubic } }
             }
             Rectangle {
                 anchors.left: parent.left
@@ -104,7 +104,7 @@ Item {
                     source: appImg
                     colorization: 1.0
                     colorizationColor: iconText.tint
-                    Behavior on colorizationColor { ColorAnimation { duration: 40 } }
+                    Behavior on colorizationColor { ColorAnimation { duration: 40; easing.type: Easing.InOutCubic } }
                 }
             }
             Text {

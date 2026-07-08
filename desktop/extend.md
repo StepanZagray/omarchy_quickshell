@@ -8,21 +8,22 @@ For the high-level overview and IPC surface, see [README.md](./README.md).
 
 | I want to | File | Anchor |
 | --- | --- | --- |
-| Add a row to the palette | `Data.js` | `omarchyItems` |
-| Add a new drill-down category | `Data.js` | `categoryNav` |
-| Change which icon renders for a file extension | `Data.js` | `fileIcons` |
-| Resize the bar | `Navbar.qml` | `barHeight` |
-| Move the bar to a different edge by default | `Navbar.qml` | `barEdge` |
-| Add or remove a bar module | `Bar.qml` | the `Module { ... }` blocks |
+| Add a row to the palette | `data/Data.js` | `omarchyItems` |
+| Add a new drill-down category | `data/Data.js` | `categoryNav` |
+| Change which icon renders for a file extension | `data/Data.js` | `fileIcons` |
+| Resize the bar | `Desktop.qml` | `barHeight` |
+| Move the bar to a different edge by default | `state/ChromeState.qml` | `barEdge` |
+| Add or remove a bar module | `bar/Bar.qml` | the `Module { ... }` blocks |
 | Change palette result cap | `OmniMenu.qml` | `maxResults` |
 | Retune search scoring | `OmniMenu.qml` | `scPrefix`, `scTitle`, `scKw`, `scCat` |
 | Change fonts | `Theme.qml` | `mono`, `serif` |
+| Tune shell motion (popups, OSD, tooltips) | `Theme.qml` | `animationDuration` |
 | Tune theme-swap animation | `Theme.qml` | `driftDelay`, `driftAnim` |
-| Remap colors.toml keys to palette roles | `Palette.js` | `mapKeys` |
+| Remap colors.toml keys to palette roles | `data/Palette.js` | `mapKeys` |
 
 ## Adding a palette row
 
-Open `Data.js` and append to `omarchyItems`:
+Open `data/Data.js` and append to `omarchyItems`:
 
 ```js
 { title: "Open Vault",
@@ -45,7 +46,7 @@ Save and the next palette open picks it up. No restart needed.
 
 ## Adding a drill-down category
 
-Categories are the synthetic top-level rows (`Apps >`, `Style >`, ...). Append to `categoryNav` in `Data.js`:
+Categories are the synthetic top-level rows (`Apps >`, `Style >`, ...). Append to `categoryNav` in `data/Data.js`:
 
 ```js
 { title: "Vault",
@@ -69,7 +70,7 @@ Comment it out in `omarchyItems`, or remove the row entirely. There is no `hidde
 
 ## File-search icons
 
-`Data.js` exposes `fileIcons`, a map from lowercased extension (or full filename, for dotless names like `Makefile`) to a Nerd Font glyph. Add to it to cover a new extension:
+`data/Data.js` exposes `fileIcons`, a map from lowercased extension (or full filename, for dotless names like `Makefile`) to a Nerd Font glyph. Add to it to cover a new extension:
 
 ```js
 const fileIcons = {
@@ -83,7 +84,7 @@ const fileIcons = {
 
 ## Bar layout
 
-`Bar.qml` is a flat list of `Module { ... }` and `Separator { ... }` blocks arranged left, center, right. To remove a module, delete its block. To reorder, move the block. To add a new one, copy an existing `Module` block and change its bindings.
+`bar/Bar.qml` is a flat list of `Module { ... }` and `Separator { ... }` blocks arranged left, center, right. To remove a module, delete its block. To reorder, move the block. To add a new one, copy an existing `Module` block and change its bindings.
 
 The shape of a `Module`:
 
@@ -98,18 +99,18 @@ Module {
 }
 ```
 
-Icons live as `icoFoo` properties on `Navbar.qml`'s `root`. Add new ones with `String.fromCodePoint(0xNNNN)` against any Nerd Font codepoint.
+Icons live as `icoFoo` properties on `Desktop.qml`'s `root`. Add new ones with `String.fromCodePoint(0xNNNN)` against any Nerd Font codepoint.
 
 ## Bar geometry
 
-`Navbar.qml`:
+`Desktop.qml` and `state/ChromeState.qml`:
 
 | Property | What it does |
 | --- | --- |
 | `barHeight: 26` | Pixel height (or width when bar is vertical). |
-| `barEdge: "top"` | Initial edge. One of `top`, `right`, `bottom`, `left`. Click the edge arrow in the bar to cycle. |
+| `barEdge: "top"` | Initial edge in `state/ChromeState.qml`. One of `top`, `right`, `bottom`, `left`. Click the edge arrow in the bar to cycle. |
 
-Workspace count lives in `Bar.qml`:
+Workspace count lives in `bar/Bar.qml`:
 
 ```qml
 Repeater { model: 10; /* ... */ }
@@ -117,7 +118,7 @@ Repeater { model: 10; /* ... */ }
 
 ## Telemetry intervals
 
-Bar pollers (cpu, mem, bluetooth, wifi, audio, battery) each have their own `Timer` block in `Navbar.qml`. Each has an `interval` in milliseconds. Lower for snappier readings at the cost of CPU. Workspace state polls every 500ms via `wsProbe`; drop to 150ms if workspace switches feel laggy.
+Bar pollers are split by concern under `state/`: CPU/memory in `SystemState.qml`, Bluetooth/Wi-Fi in `ConnectivityState.qml`, audio in `AudioState.qml`, and battery/clock in `PowerState.qml`. Each has a `Timer` block with an `interval` in milliseconds. Lower for snappier readings at the cost of CPU. Workspace state polls every 500ms via `wsProbe` in `state/WorkspaceState.qml`; drop to 150ms if workspace switches feel laggy.
 
 ## Palette tuning
 
@@ -144,6 +145,34 @@ property string serif: "..."
 
 Both the bar and the palette read from these. Change once, both surfaces follow.
 
+## Shell motion
+
+Popups (`CardWindow`), OSD toasts, tooltips, and the frame-widget morph all share one timing constant on `Theme.qml`:
+
+| Property | Default | What it drives |
+| --- | --- | --- |
+| `animationDuration` | 200ms | Reveal/fade duration for shell surfaces |
+
+Use `Easing.InOutCubic` with that duration. Do not hardcode per-widget millisecond values for show/hide — read `theme.animationDuration` (or `root.animationDuration` on the `Desktop` shell facade).
+
+Standard reveal pattern:
+
+```qml
+property real reveal: shouldShow ? 1 : 0
+Behavior on reveal {
+    NumberAnimation {
+        duration: root.animationDuration
+        easing.type: Easing.InOutCubic
+    }
+}
+visible: reveal > 0.001
+opacity: reveal
+```
+
+`ChromeState.frameAnimationDuration` and `Desktop.frameAnimationDuration` alias `theme.animationDuration` so `CardWindow` and `FrameBorder` stay in sync.
+
+Micro-interactions inside a popup (hover color, border width) may use shorter local durations; anything that opens or closes a surface should use the global constant.
+
 ## Theme animation
 
 `Theme.qml`:
@@ -157,7 +186,7 @@ These drive the `seal` saturation breath. Drop to zero for hard cuts; raise for 
 
 ## Palette colors
 
-The shell exposes six semantic roles (`paper`, `ink`, `inkDeep`, `sumi`, `indigo`, `seal`) that the rest of the QML binds to. Those roles are filled from `colors.toml` by `Palette.js`. Remap which `colors.toml` key drives which role by editing `mapKeys` in `Palette.js`:
+The shell exposes six semantic roles (`paper`, `ink`, `inkDeep`, `sumi`, `indigo`, `seal`) that the rest of the QML binds to. Those roles are filled from `colors.toml` by `data/Palette.js`. Remap which `colors.toml` key drives which role by editing `mapKeys` in `data/Palette.js`:
 
 ```js
 function mapKeys(raw) {
@@ -177,10 +206,10 @@ Useful when a theme stores its accent under a non-standard key, or when you want
 ## Workflow tips
 
 - Quickshell hot-reloads on save. Watch the launch terminal for QML errors.
-- After editing `Data.js`, the palette picks up changes on the next open; force a rescan with `qs -c desktop ipc call palette refresh`.
+- After editing `data/Data.js`, the palette picks up changes on the next open; force a rescan with `qs -c desktop ipc call palette refresh`.
 - After theme key remaps, push a fresh palette with `qs -c desktop ipc call theme apply '<json>'` (see README "Hook-driven refresh" for payload shape).
-- If something stops painting, the QML import chain in `shell.qml` is the place to start. Each surface (`Navbar`, `OmniMenu`, popups) is wired there.
+- If something stops painting, the QML import chain in `shell.qml` is the place to start. Each surface (`Desktop`, `OmniMenu`, popups) is wired there.
 
 ## Going further
 
-If you find yourself maintaining a long fork of `Data.js`, the cleaner path is to split your additions into a separate JS module and merge them onto `omarchyItems` in `OmniMenu.qml`'s `Component.onCompleted`. That keeps upstream merges painless and your additions in one file.
+If you find yourself maintaining a long fork of `data/Data.js`, the cleaner path is to split your additions into a separate JS module and merge them onto `omarchyItems` in `OmniMenu.qml`'s `Component.onCompleted`. That keeps upstream merges painless and your additions in one file.
