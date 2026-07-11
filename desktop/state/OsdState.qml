@@ -18,7 +18,9 @@ Item {
     property bool _lastCaps: false
     property bool _capsSeeded: false
 
-    readonly property string _brightnessDeviceScript: "device=\"\"; " + "for c in amdgpu_bl* intel_backlight acpi_video* nvidia_*; do " + "[ -e \"/sys/class/backlight/$c\" ] && device=\"$c\" && break; done; " + "echo \"$device\""
+    // Prefer the internal panel backlight on eDP/LVDS; otherwise walk sysfs in
+    // Omarchy order (amdgpu → intel → acpi → nvidia).
+    readonly property string _brightnessDeviceScript: "focus=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused) | .name' 2>/dev/null); " + "device=\"\"; " + "if [[ \"$focus\" == eDP* || \"$focus\" == LVDS* ]] && [ -e /sys/class/backlight/intel_backlight ]; then device=intel_backlight; " + "else for c in amdgpu_bl* intel_backlight acpi_video* nvidia_*; do " + "[ -e \"/sys/class/backlight/$c\" ] && device=\"$c\" && break; done; fi"
 
     readonly property string _kbdLedScript: "for c in /sys/class/leds/*kbd_backlight*; do " + "[ -e \"$c\" ] && basename \"$c\" && break; done"
 
@@ -91,9 +93,8 @@ Item {
 
     function brightnessSet(target) {
         const pct = Math.max(1, Math.min(100, Math.round(target)));
-        brightnessProbe.command = ["bash", "-lc", root._brightnessDeviceScript + "; " + "brightnessctl -d \"$device\" set \"" + pct + "%\" >/dev/null 2>&1; " + "pct=$(brightnessctl -d \"$device\" -m 2>/dev/null | cut -d',' -f4 | tr -d '%'); " + "printf '%s' \"${pct:-" + pct + "}\""];
-        brightnessProbe.running = false;
-        brightnessProbe.running = true;
+        root.showBar("brightness", pct, false);
+        root._runBrightnessProbe("omarchy-brightness-display " + pct + "%");
     }
 
     function brightnessAdjust(delta) {
@@ -101,7 +102,15 @@ Item {
         if (step === 0)
             return;
 
-        brightnessProbe.command = ["bash", "-lc", root._brightnessDeviceScript + "; " + "current=$(brightnessctl -d \"$device\" -m 2>/dev/null | cut -d',' -f4 | tr -d '%'); " + "current=${current:-50}; " + "delta=" + step + "; " + "if [ \"$delta\" -gt 0 ]; then " + "  if [ \"$delta\" -ge 5 ] && [ \"$current\" -lt 5 ]; then target=$((current + 1)); " + "  elif [ \"$delta\" -ge 5 ]; then target=$((current + 5)); " + "  else target=$((current + delta)); fi; " + "  [ \"$target\" -gt 100 ] && target=100; " + "  brightnessctl -d \"$device\" set \"${target}%\" >/dev/null; " + "else " + "  ad=$((delta * -1)); " + "  if [ \"$ad\" -ge 5 ] && [ \"$current\" -le 5 ]; then target=$((current - 1)); " + "  elif [ \"$ad\" -ge 5 ]; then target=$((current - 5)); " + "  else target=$((current - ad)); fi; " + "  [ \"$target\" -lt 1 ] && target=1; " + "  brightnessctl -d \"$device\" set \"${target}%\" >/dev/null; " + "fi; " + "pct=$(brightnessctl -d \"$device\" -m 2>/dev/null | cut -d',' -f4 | tr -d '%'); " + "printf '%s' \"${pct:-$current}\""];
+        const est = Math.max(1, Math.min(100, shell.brightnessPct + step));
+        root.showBar("brightness", est, false);
+
+        const arg = step > 0 ? "+" + step + "%" : (-step) + "%-";
+        root._runBrightnessProbe("omarchy-brightness-display " + arg);
+    }
+
+    function _runBrightnessProbe(adjustCmd) {
+        brightnessProbe.command = ["bash", "-lc", adjustCmd + " >/dev/null 2>&1; " + root._brightnessDeviceScript + "; " + "pct=$(brightnessctl -d \"$device\" -m 2>/dev/null | cut -d',' -f4 | tr -d '%'); " + "printf '%s' \"${pct:-0}\""];
         brightnessProbe.running = false;
         brightnessProbe.running = true;
     }
@@ -172,12 +181,12 @@ Item {
 
         stdout: StdioCollector {
             onStreamFinished: {
-                const pct = parseInt(this.text.trim());
+                const pct = parseInt(this.text.trim(), 10);
                 if (isNaN(pct))
                     return;
 
-                shell.brightnessPct = pct;
                 root.showBar("brightness", pct, false);
+                shell.brightnessPct = pct;
             }
         }
     }

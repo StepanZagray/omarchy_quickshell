@@ -18,10 +18,10 @@ Item {
     // 4px frame rail on every edge except the bar side (barInset there).
     readonly property int frameEdge: thickness
     readonly property int barInset: root.barInset
-    readonly property int cutTop: root.barEdge === "top" ? barInset : frameEdge
-    readonly property int cutBottom: root.barEdge === "bottom" ? barInset : frameEdge
-    readonly property int cutLeft: root.barEdge === "left" ? barInset : frameEdge
-    readonly property int cutRight: root.barEdge === "right" ? barInset : frameEdge
+    readonly property int cutTop: barInset
+    readonly property int cutBottom: frameEdge
+    readonly property int cutLeft: frameEdge
+    readonly property int cutRight: frameEdge
     readonly property color frameColor: root.frameBg
     readonly property color widgetBorderColor: Qt.rgba(0.4, 0.4, 0.5, 0.3)
     readonly property real widgetBorderWidth: 1
@@ -47,17 +47,25 @@ Item {
     readonly property real widgetFullBottom: Math.max(holeY, Math.min(holeBottom - holeR, root.frameWidgetY + root.frameWidgetHeight))
     readonly property real widgetMorphCenter: root.frameWidgetAttachRight ? widgetFullRight : (widgetFullLeft + widgetFullRight) / 2
     readonly property real widgetFullWidth: Math.max(0, widgetFullRight - widgetFullLeft)
-    readonly property real widgetRevealWidth: root.frameWidgetAttachRight ? widgetFullWidth * _widgetReveal : widgetFullWidth * (0.95 + 0.05 * _widgetReveal)
-    readonly property real widgetLeft: root.frameWidgetAttachRight ? widgetFullRight - (widgetFullRight - widgetFullLeft) * _widgetReveal : widgetMorphCenter - widgetRevealWidth / 2
+    readonly property real widgetFullHeight: Math.max(0, widgetFullBottom - widgetFullTop)
+    // Media morphs 50% → 100%; calendar keeps its own width curve.
+    readonly property real mediaReveal: 0.6 + 0.4 * _widgetReveal
+    readonly property real widgetRevealWidth: root.frameWidgetAttachRight ? widgetFullWidth * mediaReveal : widgetFullWidth * (0.95 + 0.05 * _widgetReveal)
+    readonly property real widgetLeft: root.frameWidgetAttachRight ? widgetFullRight - widgetRevealWidth : widgetMorphCenter - widgetRevealWidth / 2
     readonly property real widgetRight: root.frameWidgetAttachRight ? widgetFullRight : widgetMorphCenter + widgetRevealWidth / 2
-    readonly property real widgetBottom: widgetFullTop + (widgetFullBottom - widgetFullTop) * _widgetReveal
+    readonly property real widgetBottom: widgetFullTop + widgetFullHeight * _widgetReveal
     readonly property real widgetCorner: Math.min(joinR, Math.max(0, (widgetRight - widgetLeft) / 2), Math.max(0, (widgetBottom - widgetFullTop) / 2))
     readonly property real widgetTopJoin: widgetCorner
-    readonly property bool drawWidgetCut: root.barEdge === "top" && _widgetReveal > 0.001 && widgetScreenMatches && widgetRight - widgetLeft > 1 && widgetBottom - widgetFullTop > 1
+    readonly property bool drawWidgetCut: _widgetReveal > 0.001 && widgetScreenMatches && widgetRight - widgetLeft > 1 && widgetBottom - widgetFullTop > 1
 
     function syncWidgetReveal() {
         fb._widgetReveal = fb.widgetOnScreen ? 1 : 0;
         fb.requestWidgetBorderPaint();
+        // frameWidgetVisible can land before geometry on the same publish;
+        // retry next frame so the first open after reload still morphs.
+        if (root.frameWidgetVisible && (root.frameWidgetWidth <= 0 || root.frameWidgetHeight <= 0))
+            Qt.callLater(fb.syncWidgetReveal);
+
     }
 
     function requestWidgetBorderPaint() {
@@ -96,6 +104,14 @@ Item {
         }
 
         function onFrameWidgetAttachRightChanged() {
+            fb.syncWidgetReveal();
+        }
+
+        function onFrameWidgetXChanged() {
+            fb.syncWidgetReveal();
+        }
+
+        function onFrameWidgetYChanged() {
             fb.syncWidgetReveal();
         }
 

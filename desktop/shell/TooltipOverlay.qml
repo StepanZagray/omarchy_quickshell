@@ -3,9 +3,8 @@ import Quickshell
 import Quickshell.Wayland
 
 // Click-through layer pinned above everything. Position is computed from
-// the bar-window-local anchor (set by the hovered module) and the current
-// barEdge so the tip sits just off the bar's inner edge, centred on the
-// icon along the bar's axis.
+// the bar-window-local anchor (set by the hovered module) so the tip sits
+// just below the top bar, centred on the icon.
 PanelWindow {
     id: tooltipOverlay
     required property var root
@@ -37,24 +36,11 @@ PanelWindow {
         width:  tipLabel.implicitWidth  + padH * 2
         height: tipLabel.implicitHeight + padV * 2
 
-        // X / Y derive from barEdge: the tip hugs the bar's inner edge
-        // along the perpendicular axis and centres on the icon along the
-        // parallel axis (clamped a few px from the screen edge so long
-        // labels don't fall off-screen).
         x: {
-            const r = tooltipOverlay.root;
-            if (r.barEdge === "left")  return r.barHeight + gap;
-            if (r.barEdge === "right") return parent.width - r.barHeight - width - gap;
-            const center = r.tooltipBarX;
+            const center = tooltipOverlay.root.tooltipBarX;
             return Math.max(4, Math.min(parent.width - width - 4, center - width / 2));
         }
-        y: {
-            const r = tooltipOverlay.root;
-            if (r.barEdge === "top")    return r.barHeight + gap;
-            if (r.barEdge === "bottom") return parent.height - r.barHeight - height - gap;
-            const center = r.tooltipBarY;
-            return Math.max(4, Math.min(parent.height - height - 4, center - height / 2));
-        }
+        y: tooltipOverlay.root.barHeight + gap
 
         color: tooltipOverlay.root.bg
         border.color: tooltipOverlay.root.sep

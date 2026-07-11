@@ -53,7 +53,7 @@ The navbar omarchy/menu button calls `toggle()` on the sibling palette in-proces
 ```
 left   | omarchy | sep | ws1..ws10 |
 center | HH:MM |
-right  | media | sep | cpu | bt | wifi | audio | battery | edge |
+right  | media | sep | cpu | bt | wifi | audio | battery |
 ```
 
 - Click the omarchy glyph to toggle the omni-menu palette. Right-click runs `xdg-terminal-exec`.
@@ -65,7 +65,6 @@ right  | media | sep | cpu | bt | wifi | audio | battery | edge |
 - Click filmstrip to browse recent videos in `~/Videos`. Right-click opens the folder.
 - Click audio for `omarchy-launch-audio`. Right-click toggles mute.
 - Click battery for the power menu.
-- Click the edge arrow to cycle the bar between top, right, bottom, left.
 - Cycle bar faces with `qs -c desktop ipc call bar toggle`; jump directly with `qs -c desktop ipc call bar zen` or `qs -c desktop ipc call bar hackerman`.
 
 ## Palette
@@ -246,7 +245,7 @@ Everything lives under `desktop/`. `Desktop.qml` is the shell facade: the taskba
 | `quick/` | Quick-mode detail bodies and quick-panel controls. |
 | `services/` | App scan, bookmarks/history, file/GitHub/process/theme/tldr/chat providers. |
 | `data/` | Static palette entries and theme-palette parsing helpers. |
-| `state/ChromeState.qml` | Bar edge, tooltip anchors, popup anchors, frame-widget geometry. |
+| `state/ChromeState.qml` | Tooltip anchors, popup anchors, frame-widget geometry. |
 | `shell/DesktopSurfaces.qml` | Per-monitor bar/popup/shell surface construction. |
 | `shell/DesktopIpc.qml` | Desktop shell IPC targets. |
 

@@ -12,7 +12,6 @@ For the high-level overview and IPC surface, see [README.md](./README.md).
 | Add a new drill-down category | `data/Data.js` | `categoryNav` |
 | Change which icon renders for a file extension | `data/Data.js` | `fileIcons` |
 | Resize the bar | `Desktop.qml` | `barHeight` |
-| Move the bar to a different edge by default | `state/ChromeState.qml` | `barEdge` |
 | Add or remove a bar module | `bar/Bar.qml` | the `Module { ... }` blocks |
 | Change palette result cap | `OmniMenu.qml` | `maxResults` |
 | Retune search scoring | `OmniMenu.qml` | `scPrefix`, `scTitle`, `scKw`, `scCat` |
@@ -103,12 +102,11 @@ Icons live as `icoFoo` properties on `Desktop.qml`'s `root`. Add new ones with `
 
 ## Bar geometry
 
-`Desktop.qml` and `state/ChromeState.qml`:
+`Desktop.qml`:
 
 | Property | What it does |
 | --- | --- |
-| `barHeight: 26` | Pixel height (or width when bar is vertical). |
-| `barEdge: "top"` | Initial edge in `state/ChromeState.qml`. One of `top`, `right`, `bottom`, `left`. Click the edge arrow in the bar to cycle. |
+| `barHeight: 28` | Pixel height of the top bar. |
 
 Workspace count lives in `bar/Bar.qml`:
 

@@ -28,8 +28,10 @@ PanelWindow {
     readonly property bool targetScreen: osd.osdVisible && (osd.osdScreen.length === 0 || osd.osdScreen === osdWin.shellScreenName)
     readonly property string osdIcon: {
         switch (osd.osdKind) {
+        case "volume":
+            return osd.osdMuted ? osdWin.theme.icoMute : osdWin.theme.audioIcon;
         case "brightness":
-            return osdWin.theme.icoDisplay;
+            return osdWin.theme.icoSun;
         case "kbd-brightness":
             return osdWin.theme.icoKbd;
         case "mic":
@@ -37,7 +39,7 @@ PanelWindow {
         case "touchpad":
             return osd.osdActive ? osdWin.theme.icoTouchpad : osdWin.theme.icoTouchpadOff;
         default:
-            return osd.osdMuted ? osdWin.theme.icoMute : osdWin.theme.audioIcon;
+            return "";
         }
     }
     readonly property color osdIconColor: {

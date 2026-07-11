@@ -6,10 +6,8 @@ import QtQuick
 // splashed.
 Item {
     id: bloomRoot
-    required property var root
-    anchors.fill: parent
-    clip: true
 
+    required property var root
     property real ox: 0
     property real oy: 0
     property real haloR: 0
@@ -20,6 +18,9 @@ Item {
         bloomRoot.oy = y;
         bloomAnim.restart();
     }
+
+    anchors.fill: parent
+    clip: true
 
     Rectangle {
         width: bloomRoot.haloR * 2
@@ -34,18 +35,46 @@ Item {
 
     SequentialAnimation {
         id: bloomAnim
-        ScriptAction { script: { bloomRoot.haloR = 0; bloomRoot.haloO = 0; } }
-        ParallelAnimation {
-            NumberAnimation {
-                target: bloomRoot; property: "haloR"
-                from: 2; to: Math.max(bloomRoot.width, bloomRoot.height) * 0.9
-                duration: 250
-                easing.type: Easing.InOutCubic
-            }
-            SequentialAnimation {
-                NumberAnimation { target: bloomRoot; property: "haloO"; from: 0; to: 0.22; duration: 80; easing.type: Easing.InOutCubic }
-                NumberAnimation { target: bloomRoot; property: "haloO"; to: 0; duration: 170; easing.type: Easing.InOutCubic }
+
+        ScriptAction {
+            script: {
+                bloomRoot.haloR = 0;
+                bloomRoot.haloO = 0;
             }
         }
+
+        ParallelAnimation {
+            NumberAnimation {
+                target: bloomRoot
+                property: "haloR"
+                from: 2
+                to: Math.max(bloomRoot.width, bloomRoot.height) * 0.9
+                duration: 600
+                easing.type: Easing.InOutCubic
+            }
+
+            SequentialAnimation {
+                NumberAnimation {
+                    target: bloomRoot
+                    property: "haloO"
+                    from: 0
+                    to: 0.22
+                    duration: 200
+                    easing.type: Easing.InOutCubic
+                }
+
+                NumberAnimation {
+                    target: bloomRoot
+                    property: "haloO"
+                    to: 0
+                    duration: 300
+                    easing.type: Easing.InOutCubic
+                }
+
+            }
+
+        }
+
     }
+
 }

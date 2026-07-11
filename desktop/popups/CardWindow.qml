@@ -39,14 +39,12 @@ PanelWindow {
     property bool frameAttached: false
     property bool frameAttachRight: false
     property string frameScreenName: ""
-    // Anchored placement. "top" (default) places widgets below the taskbar;
-    // "" centres the card; "bottom"/"left"/"right" hug the bar's inner edge
-    // and centre on (anchorBarX, anchorBarY) along the parallel axis,
-    // clamped on-screen. The Scale origin tracks the trigger so a clamped
-    // card still feels rooted in the icon the user clicked.
-    property string anchorEdge: "top"
+    // Anchored placement. anchored=true places widgets below the top bar,
+    // centred on anchorBarX; anchored=false centres the card on screen.
+    // The Scale origin tracks the trigger so a clamped card still feels
+    // rooted in the icon the user clicked.
+    property bool anchored: true
     property real anchorBarX: 0
-    property real anchorBarY: 0
     property real anchorGap: 8
     readonly property real frameInset: 0
     readonly property real frameTopInset: frameAttached ? -1 : 0
@@ -54,7 +52,7 @@ PanelWindow {
     readonly property real joinRadius: frameAttached ? theme.frameRounding * 1.5 : 0
     readonly property color surfaceColor: frameAttached ? theme.frameBg : theme.bg
     readonly property real contentReveal: _contentReveal
-    readonly property bool _anchored: anchorEdge === "top" || anchorEdge === "bottom" || anchorEdge === "left" || anchorEdge === "right"
+    readonly property bool _anchored: anchored
     // PanelWindow can report 0×0 for a frame before the screen geometry lands.
     // Never paint (or publish frame chrome) until placement inputs are real.
     readonly property bool _layoutReady: width > 0 && height > 0 && surface.width > 0 && surface.height > 0
@@ -103,14 +101,17 @@ PanelWindow {
         // Shell geometry + visibility follow `revealed`, not content `_reveal`,
         // so FrameBorder can morph the desktop frame independently.
         if (card._layoutReady && card.revealed) {
+            // Publish geometry before visibility. FrameBorder reacts to
+            // frameWidgetVisible synchronously; width/height must already
+            // be set or the first open after reload skips the frame morph.
             card.theme.frameWidgetOwner = card.layerNamespace;
-            card.theme.frameWidgetVisible = true;
             card.theme.frameWidgetX = surface.x;
             card.theme.frameWidgetY = surface.y;
             card.theme.frameWidgetWidth = surface.width;
             card.theme.frameWidgetHeight = surface.height;
             card.theme.frameWidgetAttachRight = card.frameAttachRight;
             card.theme.frameWidgetScreen = card.frameScreenName.length > 0 ? card.frameScreenName : (card.screen ? card.screen.name : card.theme.frameWidgetScreen);
+            card.theme.frameWidgetVisible = true;
         } else if (!card.revealed && card.theme.frameWidgetOwner === card.layerNamespace) {
             card.theme.frameWidgetVisible = false;
         }
@@ -185,12 +186,6 @@ PanelWindow {
             if (card.frameAttached && card.frameAttachRight)
                 return parent.width - width - card.theme.frameThickness - card.frameRightInset;
 
-            if (card.anchorEdge === "left")
-                return card.theme.barHeight + card.anchorGap;
-
-            if (card.anchorEdge === "right")
-                return parent.width - card.theme.barHeight - width - card.anchorGap;
-
             const xAnchor = card.anchorBarX > 0 ? card.anchorBarX : parent.width / 2;
             return Math.max(card.anchorGap, Math.min(parent.width - width - card.anchorGap, xAnchor - width / 2));
         }
@@ -199,14 +194,7 @@ PanelWindow {
                 return (parent.height - height) / 2;
 
             const gap = card.frameAttached ? card.frameTopInset : card.anchorGap;
-            if (card.anchorEdge === "top")
-                return card.theme.barHeight + gap;
-
-            if (card.anchorEdge === "bottom")
-                return parent.height - card.theme.barHeight - height - gap;
-
-            const yAnchor = card.anchorBarY > 0 ? card.anchorBarY : parent.height / 2;
-            return Math.max(gap, Math.min(parent.height - height - gap, yAnchor - height / 2));
+            return card.theme.barHeight + gap;
         }
         opacity: 1
         focus: card.revealed && card._layoutReady
@@ -268,28 +256,10 @@ PanelWindow {
                 if (card.frameAttached && card.frameAttachRight)
                     return surface.width;
 
-                if (card.anchorEdge === "left")
-                    return 0;
-
-                if (card.anchorEdge === "right")
-                    return surface.width;
-
                 const xAnchor = card.anchorBarX > 0 ? card.anchorBarX : card.width / 2;
                 return Math.max(0, Math.min(surface.width, xAnchor - surface.x));
             }
-            origin.y: {
-                if (!card._anchored)
-                    return surface.height / 2;
-
-                if (card.anchorEdge === "top")
-                    return 0;
-
-                if (card.anchorEdge === "bottom")
-                    return surface.height;
-
-                const yAnchor = card.anchorBarY > 0 ? card.anchorBarY : card.height / 2;
-                return Math.max(0, Math.min(surface.height, yAnchor - surface.y));
-            }
+            origin.y: card._anchored ? 0 : surface.height / 2
             xScale: card._layoutReady ? (card.frameAttached ? 1 : card._reveal) : 0
             yScale: card._layoutReady ? (card.frameAttached ? 1 : card._reveal) : 0
         }

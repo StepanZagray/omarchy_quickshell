@@ -11,10 +11,10 @@ Item {
 
     signal activated()
 
-    visible: root.isHorizontal || active || present
-    Layout.alignment: root.isHorizontal ? Qt.AlignVCenter : Qt.AlignHCenter
-    Layout.preferredWidth: root.isHorizontal ? tag.implicitWidth : root.barHeight
-    Layout.preferredHeight: root.isHorizontal ? root.barHeight : tag.implicitHeight
+    Layout.alignment: Qt.AlignVCenter
+    Layout.fillHeight: true
+    Layout.preferredWidth: tag.implicitWidth + 4
+    Layout.preferredHeight: root.barHeight
 
     Bloom {
         id: bloom
@@ -42,12 +42,12 @@ Item {
         height: 2
         radius: 1
         color: wsCell.root.seal
-        visible: wsCell.active && wsCell.root.isHorizontal
+        visible: wsCell.active
     }
 
     MouseArea {
         anchors.fill: parent
-        anchors.margins: root.isHorizontal ? -2 : -4
+        anchors.margins: -2
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onEntered: bloom.fire(mouseX, mouseY)

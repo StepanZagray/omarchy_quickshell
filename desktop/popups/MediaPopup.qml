@@ -115,7 +115,7 @@ CardWindow {
                             "glyph": "󰒮",
                             "action": "prev"
                         }, {
-                            "glyph": mediaPopup.root.musicPlaying ? mediaPopup.root.icoPause : "󰐊",
+                            "glyph": mediaPopup.root.musicPlaying ? mediaPopup.root.icoPause : mediaPopup.root.icoPlay,
                             "action": "toggle"
                         }, {
                             "glyph": "󰒭",

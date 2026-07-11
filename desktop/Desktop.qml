@@ -46,6 +46,7 @@ Item {
     readonly property string icoCamera: String.fromCodePoint(0xf0100)
     readonly property string icoRefresh: String.fromCodePoint(0xf0450)
     readonly property string icoDisplay: String.fromCodePoint(0xf0379)
+    readonly property string icoSun: String.fromCodePoint(0xf0599)
     readonly property string icoPower: String.fromCodePoint(0xf0425)
     readonly property string icoAether: String.fromCodePoint(0xf03d8)
     readonly property string icoFilm: String.fromCodePoint(0xf0231)
@@ -53,6 +54,7 @@ Item {
     readonly property string icoUpdate: String.fromCodePoint(0xf021)
     readonly property string icoPlug: String.fromCodePoint(0xf06a5)
     readonly property string icoMusic: String.fromCodePoint(0xf001)
+    readonly property string icoPlay: String.fromCodePoint(0xf04b)
     readonly property string icoPause: String.fromCodePoint(0xf04c)
     readonly property string icoCaps: String.fromCodePoint(0xf030e)
     readonly property string icoLanguage: String.fromCodePoint(0xf05ca)
@@ -82,11 +84,6 @@ Item {
     property alias frameWidgetHeight: chrome.frameWidgetHeight
     property alias frameWidgetAttachRight: chrome.frameWidgetAttachRight
     property alias frameWidgetScreen: chrome.frameWidgetScreen
-
-    property alias barEdge: chrome.barEdge
-    readonly property alias isHorizontal: chrome.isHorizontal
-    function cycleBarEdge() { chrome.cycleBarEdge(); }
-    function edgeArrow() { return chrome.edgeArrow(); }
 
     property alias tooltipText: chrome.tooltipText
     property alias tooltipBarX: chrome.tooltipBarX

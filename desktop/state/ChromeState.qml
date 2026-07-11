@@ -19,8 +19,6 @@ Item {
     property real frameWidgetHeight: 0
     property bool frameWidgetAttachRight: false
     property string frameWidgetScreen: ""
-    property string barEdge: "top"
-    readonly property bool isHorizontal: barEdge === "top" || barEdge === "bottom"
     property string tooltipText: ""
     property real tooltipBarX: 0
     property real tooltipBarY: 0
@@ -33,20 +31,6 @@ Item {
     property Item mediaAnchorItem: null
     property Item displayAnchorItem: null
     property Item systemAnchorItem: null
-
-    function cycleBarEdge() {
-        const edges = ["top", "right", "bottom", "left"];
-        root.barEdge = edges[(edges.indexOf(root.barEdge) + 1) % 4];
-    }
-
-    function edgeArrow() {
-        return ({
-            "top": "↑",
-            "right": "→",
-            "bottom": "↓",
-            "left": "←"
-        })[root.barEdge] || "?";
-    }
 
     function showTooltip(text, x, y) {
         if (!text)
