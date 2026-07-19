@@ -1,5 +1,5 @@
 import QtQuick
-import "../data/Data.js" as Data
+import "../../data/OmniData.js" as Data
 
 // Surfaces desktop shell popup widgets as palette rows.
 Item {

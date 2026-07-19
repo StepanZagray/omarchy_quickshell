@@ -115,8 +115,8 @@ Item {
                     border.color: kbdFocused || shotMouse.containsMouse ? body.root.seal : body.root.sep
                     border.width: kbdFocused ? 2 : 1
                     clip: true
-                    Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-                    Behavior on border.width { NumberAnimation { duration: 120; easing.type: Easing.InOutCubic } }
+                    Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                     Image {
                         anchors.fill: parent
@@ -168,7 +168,7 @@ Item {
                         antialiasing: true
                         Behavior on opacity {
                             NumberAnimation {
-                                duration: copyFlash.justCopied ? 80 : 600
+                                duration: copyFlash.justCopied ? body.root.animationDuration / 2 : body.root.animationDuration * 3
                                 easing.type: Easing.InOutCubic
                             }
                         }

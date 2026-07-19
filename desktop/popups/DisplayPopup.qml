@@ -124,7 +124,7 @@ CardWindow {
                 font.family: displayPopup.root.mono
                 font.pixelSize: 10
                 font.letterSpacing: 2
-                Behavior on color { ColorAnimation { duration: 140; easing.type: displayPopup.animationEasing } }
+                Behavior on color { ColorAnimation { duration: displayPopup.animationDuration; easing.type: displayPopup.animationEasing } }
             }
 
             Row {

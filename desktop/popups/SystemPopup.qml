@@ -86,7 +86,7 @@ CardWindow {
                         anchors.bottom: parent.bottom
                         width: parent.width * Math.max(0, Math.min(1, modelData.value / 100))
                         color: systemPopup.root.ink
-                        Behavior on width { NumberAnimation { duration: 260; easing.type: systemPopup.animationEasing } }
+                        Behavior on width { NumberAnimation { duration: systemPopup.animationDuration; easing.type: systemPopup.animationEasing } }
                     }
                 }
             }

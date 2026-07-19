@@ -125,13 +125,13 @@ Item {
         NumberAnimation {
             target: theme; property: "driftAmount"
             from: 0; to: 1
-            duration: 200
+            duration: theme.animationDuration
             easing.type: Easing.InOutCubic
         }
         NumberAnimation {
             target: theme; property: "driftAmount"
             to: 0
-            duration: 2800
+            duration: theme.animationDuration * 14
             easing.type: Easing.InOutCubic
         }
     }

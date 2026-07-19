@@ -6,35 +6,48 @@ import QtQuick
 // currently-active power profile).
 Item {
     id: btn
-    required property var root
 
+    required property var root
     property string label: ""
     property string glyph: ""
-    property bool   selected: false
+    property bool selected: false
     // Bumps the horizontal padding for tighter button rows.
-    property int    padH: 14
+    property int padH: 14
 
     signal clicked()
 
-    implicitWidth:  content.implicitWidth + padH * 2
-    implicitHeight: 28
+    implicitWidth: content.implicitWidth + padH * 2
+    implicitHeight: 32
+    opacity: enabled ? 1 : 0.4
 
     Rectangle {
         anchors.fill: parent
         radius: btn.root.cornerRadius
-        color: btn.selected
-               ? Qt.rgba(btn.root.seal.r, btn.root.seal.g, btn.root.seal.b, 0.20)
-               : mouse.containsMouse
-                  ? Qt.rgba(btn.root.ink.r, btn.root.ink.g, btn.root.ink.b, 0.10)
-                  : Qt.rgba(btn.root.ink.r, btn.root.ink.g, btn.root.ink.b, 0.03)
+        color: btn.selected ? Qt.rgba(btn.root.seal.r, btn.root.seal.g, btn.root.seal.b, 0.2) : mouse.containsMouse && btn.enabled ? Qt.rgba(btn.root.ink.r, btn.root.ink.g, btn.root.ink.b, 0.1) : Qt.rgba(btn.root.ink.r, btn.root.ink.g, btn.root.ink.b, 0.03)
         border.color: btn.selected ? btn.root.seal : btn.root.sep
         border.width: btn.selected ? 2 : 1
-        Behavior on color        { ColorAnimation  { duration: 120; easing.type: Easing.InOutCubic } }
-        Behavior on border.color { ColorAnimation  { duration: 120; easing.type: Easing.InOutCubic } }
+
+        Behavior on color {
+            ColorAnimation {
+                duration: btn.root.animationDuration
+                easing.type: Easing.InOutCubic
+            }
+
+        }
+
+        Behavior on border.color {
+            ColorAnimation {
+                duration: btn.root.animationDuration
+                easing.type: Easing.InOutCubic
+            }
+
+        }
+
     }
 
     Row {
         id: content
+
         anchors.centerIn: parent
         spacing: 8
 
@@ -44,24 +57,29 @@ Item {
             text: btn.glyph
             color: btn.selected ? btn.root.seal : btn.root.ink
             font.family: btn.root.mono
-            font.pixelSize: 13
+            font.pixelSize: 14
         }
+
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: btn.label
             color: btn.selected ? btn.root.seal : btn.root.ink
             font.family: btn.root.mono
-            font.pixelSize: 10
+            font.pixelSize: 12
             font.letterSpacing: 1.5
             font.weight: Font.Medium
         }
+
     }
 
     MouseArea {
         id: mouse
+
         anchors.fill: parent
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
+        enabled: btn.enabled
+        cursorShape: btn.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
         onClicked: btn.clicked()
     }
+
 }

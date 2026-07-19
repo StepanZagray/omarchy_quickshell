@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Io
 import "state" as State
 import "shell" as Shell
+import "services" as Services
 
 // Desktop shell facade. The taskbar lives in bar/Bar.qml; this file owns
 // shared state, popups, OSD, and layer wiring. Bars and popups bind to `root.*`.
@@ -35,7 +36,26 @@ Item {
     signal paletteToggleRequested()
     signal netBurst()
 
+    // Native system menu visibility. The actions themselves continue to use
+    // Omarchy's system commands so only the presentation layer lives here.
+    property bool powerMenuVisible: false
+    function openPowerMenu() { powerMenuVisible = true; }
+    function togglePowerMenu() { powerMenuVisible = !powerMenuVisible; }
+
     function workspaceLabel(n) { return String(n); }
+
+    // ---------- Notifications ----------
+    Services.NotificationService { id: notificationService }
+
+    readonly property var notificationModel: notificationService.notifications
+    readonly property int notificationCount: notificationService.notifications.values.length
+    readonly property bool notificationsSilent: notificationService.silent
+    function dismissLastNotification() { notificationService.dismissLast(); }
+    function dismissAllNotifications() { notificationService.dismissAll(); }
+    function invokeLastNotification() { notificationService.invokeLast(); }
+    function restoreLastNotification() { notificationService.restoreLast(); }
+    function toggleNotificationSilence() { notificationService.toggleSilent(); }
+    function invokeNotification(notification) { notificationService.invoke(notification); }
 
     readonly property string icoOmarchy: String.fromCodePoint(0xe900)
     readonly property string icoBtOn: String.fromCodePoint(0xf294)

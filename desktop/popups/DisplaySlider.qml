@@ -44,7 +44,7 @@ Item {
         font.family: slider.root.mono
         font.pixelSize: 10
         font.letterSpacing: 2
-        Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.InOutCubic } }
+        Behavior on color { ColorAnimation { duration: slider.root.animationDuration; easing.type: Easing.InOutCubic } }
     }
     Text {
         anchors.right: parent.right
@@ -75,8 +75,8 @@ Item {
             color: slider.root.seal
             opacity: slider.selected ? 1.0 : 0.75
             antialiasing: true
-            Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-            Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.InOutCubic } }
+            Behavior on width { NumberAnimation { duration: slider.root.animationDuration; easing.type: Easing.InOutCubic } }
+            Behavior on opacity { NumberAnimation { duration: slider.root.animationDuration; easing.type: Easing.InOutCubic } }
         }
 
         // Thumb sits 4px above/below the track on the boundary.
@@ -88,7 +88,7 @@ Item {
             x: Math.max(0, Math.min(parent.width - width,
                         parent.width * slider.norm - width / 2))
             y: -4
-            Behavior on x { NumberAnimation { duration: 120; easing.type: Easing.InOutCubic } }
+            Behavior on x { NumberAnimation { duration: slider.root.animationDuration; easing.type: Easing.InOutCubic } }
         }
 
         MouseArea {

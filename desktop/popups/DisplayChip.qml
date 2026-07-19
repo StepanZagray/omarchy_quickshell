@@ -21,8 +21,8 @@ Item {
         border.width: 1
         radius: chip.root.cornerRadius
         antialiasing: true
-        Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.InOutCubic } }
-        Behavior on border.color { ColorAnimation { duration: 140; easing.type: Easing.InOutCubic } }
+        Behavior on color { ColorAnimation { duration: chip.root.animationDuration; easing.type: Easing.InOutCubic } }
+        Behavior on border.color { ColorAnimation { duration: chip.root.animationDuration; easing.type: Easing.InOutCubic } }
     }
 
     Text {

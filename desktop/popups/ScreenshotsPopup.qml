@@ -154,7 +154,7 @@ CardWindow {
                         cache: true
                         clip: true
                         opacity: shotMouse.containsMouse || shotCell.isSelected ? 1.0 : 0.85
-                        Behavior on opacity { NumberAnimation { duration: 140; easing.type: screenshotsPopup.animationEasing } }
+                        Behavior on opacity { NumberAnimation { duration: screenshotsPopup.animationDuration; easing.type: screenshotsPopup.animationEasing } }
                     }
 
                     Rectangle {
@@ -165,7 +165,7 @@ CardWindow {
                         border.width: shotMouse.containsMouse && !shotCell.isSelected ? 1 : 0
                         visible: shotCell.filled
                         antialiasing: true
-                        Behavior on border.width { NumberAnimation { duration: 120; easing.type: screenshotsPopup.animationEasing } }
+                        Behavior on border.width { NumberAnimation { duration: screenshotsPopup.animationDuration; easing.type: screenshotsPopup.animationEasing } }
                     }
 
                     // Snap-on / fade-out so the ack reads even from peripheral
@@ -181,7 +181,7 @@ CardWindow {
                         antialiasing: true
                         Behavior on opacity {
                             NumberAnimation {
-                                duration: shotCell.justCopied ? 80 : 600
+                                duration: shotCell.justCopied ? screenshotsPopup.animationDuration / 2 : screenshotsPopup.animationDuration * 3
                                 easing.type: screenshotsPopup.animationEasing
                             }
                         }
@@ -251,8 +251,8 @@ CardWindow {
                 font.pixelSize: 11
                 font.letterSpacing: 2
                 opacity: copied ? 1.0 : 0.7
-                Behavior on color { ColorAnimation { duration: 180; easing.type: screenshotsPopup.animationEasing } }
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: screenshotsPopup.animationEasing } }
+                Behavior on color { ColorAnimation { duration: screenshotsPopup.animationDuration; easing.type: screenshotsPopup.animationEasing } }
+                Behavior on opacity { NumberAnimation { duration: screenshotsPopup.animationDuration; easing.type: screenshotsPopup.animationEasing } }
             }
         }
 

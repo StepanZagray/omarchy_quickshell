@@ -21,12 +21,19 @@ PanelWindow {
     property real cardWidth: 460
     // -1 -> auto-size from content implicit height; otherwise fixed.
     property real cardHeight: -1
-    readonly property int animationDuration: card.theme && card.theme.frameAnimationDuration !== undefined ? card.theme.frameAnimationDuration : 320
+    // Writable so popups can override for debugging, e.g. animationDuration: 800.
+    // Defaults to theme.animationDuration when not set by the caller.
+    property int animationDuration: card.theme && card.theme.animationDuration !== undefined
+                                    ? card.theme.animationDuration
+                                    : (card.theme && card.theme.frameAnimationDuration !== undefined
+                                       ? card.theme.frameAnimationDuration : 200)
     property int animationEasing: Easing.InOutCubic
     property real contentTravel: 10
     property real contentOpenDelayFactor: 0
     property real contentOpenDurationFactor: 1
     property real contentCloseDurationFactor: 1
+    property real revealScaleFrom: 0 // default = current 0→1 behavior
+    property bool revealFades: false // default = opacity stays 1
     property string layerNamespace: "omarchy-card"
     // Body inset inside the card surface. Override per popup, e.g.
     // bodyPaddingTop: 4 for a tighter top edge on frame-attached widgets.
@@ -196,6 +203,9 @@ PanelWindow {
             const gap = card.frameAttached ? card.frameTopInset : card.anchorGap;
             return card.theme.barHeight + gap;
         }
+        // Panel chrome fades by baking alpha into the fill/border. Item.opacity
+        // on a layer-shell surface is easy to miss (and would also multiply the
+        // delayed content fade). Content keeps using contentReveal on its own.
         opacity: 1
         focus: card.revealed && card._layoutReady
         Keys.onPressed: function(event) {
@@ -210,8 +220,11 @@ PanelWindow {
         Rectangle {
             visible: !card.frameAttached
             anchors.fill: parent
-            color: card.surfaceColor
-            border.color: card.theme.sep
+            readonly property real fade: card.revealFades ? card._reveal : 1
+            color: Qt.rgba(card.surfaceColor.r, card.surfaceColor.g, card.surfaceColor.b,
+                           card.surfaceColor.a * fade)
+            border.color: Qt.rgba(card.theme.sep.r, card.theme.sep.g, card.theme.sep.b,
+                                  card.theme.sep.a * fade)
             border.width: 1
             radius: card.theme.cornerRadius
         }
@@ -240,14 +253,6 @@ PanelWindow {
 
         }
 
-        Behavior on opacity {
-            NumberAnimation {
-                duration: card.revealed ? 160 : 90
-                easing.type: card.animationEasing
-            }
-
-        }
-
         transform: Scale {
             origin.x: {
                 if (!card._anchored)
@@ -260,8 +265,14 @@ PanelWindow {
                 return Math.max(0, Math.min(surface.width, xAnchor - surface.x));
             }
             origin.y: card._anchored ? 0 : surface.height / 2
-            xScale: card._layoutReady ? (card.frameAttached ? 1 : card._reveal) : 0
-            yScale: card._layoutReady ? (card.frameAttached ? 1 : card._reveal) : 0
+            xScale: card._layoutReady
+                    ? (card.frameAttached ? 1
+                       : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal))
+                    : card.revealScaleFrom
+            yScale: card._layoutReady
+                    ? (card.frameAttached ? 1
+                       : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal))
+                    : card.revealScaleFrom
         }
 
     }

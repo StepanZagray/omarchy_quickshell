@@ -232,9 +232,9 @@ Item {
                                       : rowMouse.containsMouse ? body.root.rowHi : "transparent"
                     border.color: kbdFocused ? body.root.seal : body.root.sep
                     border.width: kbdFocused ? 2 : 1
-                    Behavior on color        { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-                    Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-                    Behavior on border.width { NumberAnimation { duration: 120; easing.type: Easing.InOutCubic } }
+                    Behavior on color        { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                     Row {
                         id: swatchRow
@@ -335,8 +335,8 @@ Item {
                         border.color: kbdFocused || whMouse.containsMouse ? body.root.seal : body.root.sep
                         border.width: kbdFocused ? 2 : 1
                         clip: true
-                        Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-                        Behavior on border.width { NumberAnimation { duration: 120; easing.type: Easing.InOutCubic } }
+                        Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                        Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                         Image {
                             anchors.fill: parent
@@ -396,9 +396,9 @@ Item {
                                         : themeMouse.containsMouse ? body.root.rowHi : "transparent"
                     border.color: kbdFocused || modelData.isActive ? body.root.seal : body.root.sep
                     border.width: kbdFocused ? 2 : 1
-                    Behavior on color        { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-                    Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-                    Behavior on border.width { NumberAnimation { duration: 120; easing.type: Easing.InOutCubic } }
+                    Behavior on color        { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                     Row {
                         id: themeSwatchRow

@@ -18,8 +18,10 @@ PanelWindow {
     readonly property int barSlot: 120
     readonly property int valueSlot: 16
     readonly property int chipHeight: 44
-    readonly property int slideDistance: 48
+    readonly property int slideDistance: 24
     readonly property int chipMarginBottom: 70
+    // Match PowerMenu shell reveal: grow from this scale → 1 as `reveal` goes 0→1.
+    readonly property real revealScaleFrom: 0.9
     readonly property int barChipWidth: chipPad * 2 + iconSlot + chipGap + barSlot + chipGap + valueSlot
     readonly property bool barMode: osd.osdKind === "volume" || osd.osdKind === "brightness" || osd.osdKind === "kbd-brightness"
     readonly property bool showIcon: osd.osdKind !== "caps"
@@ -54,16 +56,17 @@ PanelWindow {
     property real reveal: targetScreen ? 1 : 0
 
     color: "transparent"
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.namespace: "omarchy-osd"
+    visible: reveal > 0.001
+
     anchors {
         top: true
         bottom: true
         left: true
         right: true
     }
-    exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.namespace: "omarchy-osd"
-    visible: reveal > 0.001
 
     Text {
         id: statusMeasure
@@ -87,10 +90,17 @@ PanelWindow {
         border.color: osdWin.theme.sep
         border.width: 1
         opacity: osdWin.reveal
-
-        transform: Translate {
-            y: (1 - osdWin.reveal) * osdWin.slideDistance
-        }
+        transform: [
+            Scale {
+                origin.x: chip.width / 2
+                origin.y: chip.height / 2
+                xScale: osdWin.revealScaleFrom + (1 - osdWin.revealScaleFrom) * osdWin.reveal
+                yScale: osdWin.revealScaleFrom + (1 - osdWin.revealScaleFrom) * osdWin.reveal
+            },
+            Translate {
+                y: (1 - osdWin.reveal) * osdWin.slideDistance
+            }
+        ]
 
         Item {
             id: pad
@@ -219,6 +229,7 @@ PanelWindow {
             duration: osdWin.theme.animationDuration
             easing.type: Easing.InOutCubic
         }
+
     }
 
     mask: Region {

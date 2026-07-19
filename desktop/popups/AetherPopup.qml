@@ -255,8 +255,8 @@ CardWindow {
                 SequentialAnimation on opacity {
                     running: aetherPopup.root.aetherVisible
                     loops: Animation.Infinite
-                    NumberAnimation { from: 1; to: 0.2; duration: 600; easing.type: aetherPopup.animationEasing }
-                    NumberAnimation { from: 0.2; to: 1; duration: 600; easing.type: aetherPopup.animationEasing }
+                    NumberAnimation { from: 1; to: 0.2; duration: aetherPopup.animationDuration * 3; easing.type: aetherPopup.animationEasing }
+                    NumberAnimation { from: 0.2; to: 1; duration: aetherPopup.animationDuration * 3; easing.type: aetherPopup.animationEasing }
                 }
             }
         }
@@ -291,7 +291,7 @@ CardWindow {
                            : (aeRow.selected
                               ? Qt.rgba(aetherPopup.root.ink.r, aetherPopup.root.ink.g, aetherPopup.root.ink.b, 0.04)
                               : "transparent")
-                    Behavior on color { ColorAnimation { duration: 120; easing.type: aetherPopup.animationEasing } }
+                    Behavior on color { ColorAnimation { duration: aetherPopup.animationDuration; easing.type: aetherPopup.animationEasing } }
                 }
 
                 Rectangle {
@@ -452,7 +452,7 @@ CardWindow {
                         cache: true
                         clip: true
                         opacity: whMouse.containsMouse || whCell.isSelected ? 1.0 : 0.85
-                        Behavior on opacity { NumberAnimation { duration: 140; easing.type: aetherPopup.animationEasing } }
+                        Behavior on opacity { NumberAnimation { duration: aetherPopup.animationDuration; easing.type: aetherPopup.animationEasing } }
                     }
                 }
 

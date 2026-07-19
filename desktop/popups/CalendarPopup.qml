@@ -175,7 +175,7 @@ CardWindow {
 
                         Behavior on opacity {
                             NumberAnimation {
-                                duration: 120
+                                duration: calendarPopup.animationDuration
                                 easing.type: calendarPopup.animationEasing
                             }
 

@@ -128,9 +128,9 @@ Item {
                            : "transparent"
                 border.color: modelData.inUse || kbdFocused ? body.root.seal : body.root.sep
                 border.width: kbdFocused ? 2 : 1
-                Behavior on color        { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-                Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
-                Behavior on border.width { NumberAnimation { duration: 120; easing.type: Easing.InOutCubic } }
+                Behavior on color        { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                 Text {
                     id: barsIcon

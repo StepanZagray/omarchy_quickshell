@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell.Io
-import "../data/Data.js" as Data
+import "../../data/OmniData.js" as Data
 
 // One-shot scan of XDG application directories. configparser handles the
 // gnarly bits — section headers, continuation lines, encodings, comments,

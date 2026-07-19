@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../data/Data.js" as Data
+import "../data/OmniData.js" as Data
 import "../data/Palette.js" as Palette
 
 // Theme switcher. Probes both $OMARCHY_PATH/themes (official) and

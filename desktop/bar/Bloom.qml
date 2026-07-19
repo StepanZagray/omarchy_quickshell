@@ -49,7 +49,7 @@ Item {
                 property: "haloR"
                 from: 2
                 to: Math.max(bloomRoot.width, bloomRoot.height) * 0.9
-                duration: 600
+                duration: bloomRoot.root.animationDuration * 3
                 easing.type: Easing.InOutCubic
             }
 
@@ -59,7 +59,7 @@ Item {
                     property: "haloO"
                     from: 0
                     to: 0.22
-                    duration: 200
+                    duration: bloomRoot.root.animationDuration
                     easing.type: Easing.InOutCubic
                 }
 
@@ -67,7 +67,7 @@ Item {
                     target: bloomRoot
                     property: "haloO"
                     to: 0
-                    duration: 300
+                    duration: bloomRoot.root.animationDuration * 2
                     easing.type: Easing.InOutCubic
                 }
 

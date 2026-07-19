@@ -77,8 +77,8 @@ Item {
                            : (body.shell && body.shell.batVal <= 20
                               ? body.root.indigo
                               : body.root.ink)
-                    Behavior on width { NumberAnimation { duration: 380; easing.type: Easing.InOutCubic } }
-                    Behavior on color { ColorAnimation  { duration: 180; easing.type: Easing.InOutCubic } }
+                    Behavior on width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on color { ColorAnimation  { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
                 }
             }
         }

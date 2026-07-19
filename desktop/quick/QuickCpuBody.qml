@@ -70,7 +70,7 @@ Item {
                         anchors.bottom: parent.bottom
                         width: parent.width * Math.max(0, Math.min(1, modelData.value / 100))
                         color: body.root.ink
-                        Behavior on width { NumberAnimation { duration: 360; easing.type: Easing.InOutCubic } }
+                        Behavior on width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
                     }
                 }
                 Text {

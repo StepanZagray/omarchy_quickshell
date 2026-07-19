@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell.Io
-import "../data/Data.js" as Data
+import "../../data/OmniData.js" as Data
 
 // gh CLI-backed search drill. Two surfaces:
 //

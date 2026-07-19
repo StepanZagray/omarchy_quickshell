@@ -30,7 +30,7 @@ var base = [
     { key: "videos",      keywords: "videos films clips recordings browse gallery library",
       action: "qs -c desktop ipc call videos toggle" },
     { key: "power",       keywords: "power menu suspend hibernate logout restart shutdown lock",
-      action: "omarchy-menu power" }
+      action: "qs -c desktop ipc call power open" }
 ];
 
 // Build the per-tile dynamic map (glyph/label/sub/tone) from live

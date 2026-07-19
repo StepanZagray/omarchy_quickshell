@@ -8,13 +8,13 @@ For the high-level overview and IPC surface, see [README.md](./README.md).
 
 | I want to | File | Anchor |
 | --- | --- | --- |
-| Add a row to the palette | `data/Data.js` | `omarchyItems` |
-| Add a new drill-down category | `data/Data.js` | `categoryNav` |
-| Change which icon renders for a file extension | `data/Data.js` | `fileIcons` |
+| Add a row to the palette | `data/OmniData.js` | `omarchyItems` |
+| Add a new drill-down category | `data/OmniData.js` | `categoryNav` |
+| Change which icon renders for a file extension | `data/OmniData.js` | `fileIcons` |
 | Resize the bar | `Desktop.qml` | `barHeight` |
 | Add or remove a bar module | `bar/Bar.qml` | the `Module { ... }` blocks |
-| Change palette result cap | `OmniMenu.qml` | `maxResults` |
-| Retune search scoring | `OmniMenu.qml` | `scPrefix`, `scTitle`, `scKw`, `scCat` |
+| Change palette result cap | `omnimenu/SearchModel.qml` | `maxResults` |
+| Retune search scoring | `omnimenu/SearchModel.qml` | the four `*Score` properties |
 | Change fonts | `Theme.qml` | `mono`, `serif` |
 | Tune shell motion (popups, OSD, tooltips) | `Theme.qml` | `animationDuration` |
 | Tune theme-swap animation | `Theme.qml` | `driftDelay`, `driftAnim` |
@@ -22,7 +22,7 @@ For the high-level overview and IPC surface, see [README.md](./README.md).
 
 ## Adding a palette row
 
-Open `data/Data.js` and append to `omarchyItems`:
+Open `data/OmniData.js` and append to `omarchyItems`:
 
 ```js
 { title: "Open Vault",
@@ -45,7 +45,7 @@ Save and the next palette open picks it up. No restart needed.
 
 ## Adding a drill-down category
 
-Categories are the synthetic top-level rows (`Apps >`, `Style >`, ...). Append to `categoryNav` in `data/Data.js`:
+Categories are the synthetic top-level rows (`Apps >`, `Style >`, ...). Append to `categoryNav` in `data/OmniData.js`:
 
 ```js
 { title: "Vault",
@@ -69,7 +69,7 @@ Comment it out in `omarchyItems`, or remove the row entirely. There is no `hidde
 
 ## File-search icons
 
-`data/Data.js` exposes `fileIcons`, a map from lowercased extension (or full filename, for dotless names like `Makefile`) to a Nerd Font glyph. Add to it to cover a new extension:
+`data/OmniData.js` exposes `fileIcons`, a map from lowercased extension (or full filename, for dotless names like `Makefile`) to a Nerd Font glyph. Add to it to cover a new extension:
 
 ```js
 const fileIcons = {
@@ -204,10 +204,10 @@ Useful when a theme stores its accent under a non-standard key, or when you want
 ## Workflow tips
 
 - Quickshell hot-reloads on save. Watch the launch terminal for QML errors.
-- After editing `data/Data.js`, the palette picks up changes on the next open; force a rescan with `qs -c desktop ipc call palette refresh`.
+- After editing `data/OmniData.js`, the palette picks up changes on the next open; force a rescan with `qs -c desktop ipc call palette refresh`.
 - After theme key remaps, push a fresh palette with `qs -c desktop ipc call theme apply '<json>'` (see README "Hook-driven refresh" for payload shape).
 - If something stops painting, the QML import chain in `shell.qml` is the place to start. Each surface (`Desktop`, `OmniMenu`, popups) is wired there.
 
 ## Going further
 
-If you find yourself maintaining a long fork of `data/Data.js`, the cleaner path is to split your additions into a separate JS module and merge them onto `omarchyItems` in `OmniMenu.qml`'s `Component.onCompleted`. That keeps upstream merges painless and your additions in one file.
+If you find yourself maintaining a long fork of `data/OmniData.js`, keep custom rows in a separate JS module and merge them in `omnimenu/SearchModel.qml`. That keeps your additions isolated from the built-in catalog.

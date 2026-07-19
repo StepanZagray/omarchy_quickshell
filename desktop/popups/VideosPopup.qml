@@ -161,7 +161,7 @@ CardWindow {
                         cache: false
                         clip: true
                         opacity: vidMouse.containsMouse || vidCell.isSelected ? 1.0 : 0.85
-                        Behavior on opacity { NumberAnimation { duration: 140; easing.type: videosPopup.animationEasing } }
+                        Behavior on opacity { NumberAnimation { duration: videosPopup.animationDuration; easing.type: videosPopup.animationEasing } }
                     }
 
                     Text {
@@ -204,7 +204,7 @@ CardWindow {
                         border.width: vidMouse.containsMouse && !vidCell.isSelected ? 1 : 0
                         visible: vidCell.filled
                         antialiasing: true
-                        Behavior on border.width { NumberAnimation { duration: 120; easing.type: videosPopup.animationEasing } }
+                        Behavior on border.width { NumberAnimation { duration: videosPopup.animationDuration; easing.type: videosPopup.animationEasing } }
                     }
 
                     Rectangle {
@@ -218,7 +218,7 @@ CardWindow {
                         antialiasing: true
                         Behavior on opacity {
                             NumberAnimation {
-                                duration: vidCell.justCopied ? 80 : 600
+                                duration: vidCell.justCopied ? videosPopup.animationDuration / 2 : videosPopup.animationDuration * 3
                                 easing.type: videosPopup.animationEasing
                             }
                         }
@@ -335,8 +335,8 @@ CardWindow {
                 font.pixelSize: 11
                 font.letterSpacing: 2
                 opacity: copied ? 1.0 : 0.7
-                Behavior on color { ColorAnimation { duration: 180; easing.type: videosPopup.animationEasing } }
-                Behavior on opacity { NumberAnimation { duration: 180; easing.type: videosPopup.animationEasing } }
+                Behavior on color { ColorAnimation { duration: videosPopup.animationDuration; easing.type: videosPopup.animationEasing } }
+                Behavior on opacity { NumberAnimation { duration: videosPopup.animationDuration; easing.type: videosPopup.animationEasing } }
             }
         }
 

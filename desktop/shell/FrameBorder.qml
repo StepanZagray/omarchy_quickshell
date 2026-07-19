@@ -58,6 +58,8 @@ Item {
     readonly property real widgetTopJoin: widgetCorner
     readonly property bool drawWidgetCut: _widgetReveal > 0.001 && widgetScreenMatches && widgetRight - widgetLeft > 1 && widgetBottom - widgetFullTop > 1
 
+    // Popup-open entry point. CardWindow publishes frameWidget* properties;
+    // this starts the frame morph and invalidates the separate border canvas.
     function syncWidgetReveal() {
         fb._widgetReveal = fb.widgetOnScreen ? 1 : 0;
         fb.requestWidgetBorderPaint();
@@ -74,6 +76,8 @@ Item {
 
     }
 
+    // Keep WidgetBorder's canvas current during the reveal animation and when
+    // CardWindow republishes its placement after a layout/screen change.
     anchors.fill: parent
     onWidthChanged: fb.requestWidgetBorderPaint()
     onHeightChanged: fb.requestWidgetBorderPaint()
@@ -86,6 +90,8 @@ Item {
     onWidgetTopJoinChanged: fb.requestWidgetBorderPaint()
     Component.onCompleted: fb.syncWidgetReveal()
 
+    // CardWindow -> FrameBorder state bridge. Calendar uses attachRight=false;
+    // media uses attachRight=true and follows the alternate shape path below.
     Connections {
         function onFrameWidgetVisibleChanged() {
             fb.syncWidgetReveal();
@@ -403,95 +409,11 @@ Item {
 
     }
 
-    Canvas {
+    // Canvas repainting and the popup outline live in WidgetBorder.qml.
+    // Edit that component to change how the calendar border redraws.
+    WidgetBorder {
         id: widgetBorderCanvas
-
-        function cssColor(c) {
-            return "rgba(" + Math.round(c.r * 255) + ", " + Math.round(c.g * 255) + ", " + Math.round(c.b * 255) + ", " + c.a + ")";
-        }
-
-        function cssColorWithAlpha(c, alpha) {
-            return "rgba(" + Math.round(c.r * 255) + ", " + Math.round(c.g * 255) + ", " + Math.round(c.b * 255) + ", " + alpha + ")";
-        }
-
-        function strokeFade(ctx, x1, y1, x2, y2, awayFromWidget) {
-            const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
-            if (awayFromWidget) {
-                gradient.addColorStop(0, cssColorWithAlpha(fb.widgetBorderColor, fb.widgetBorderAlpha));
-                gradient.addColorStop(1, cssColorWithAlpha(fb.widgetBorderColor, 0));
-            } else {
-                gradient.addColorStop(0, cssColorWithAlpha(fb.widgetBorderColor, 0));
-                gradient.addColorStop(1, cssColorWithAlpha(fb.widgetBorderColor, fb.widgetBorderAlpha));
-            }
-            ctx.save();
-            ctx.strokeStyle = gradient;
-            ctx.lineWidth = fb.widgetBorderWidth;
-            ctx.lineCap = "butt";
-            ctx.beginPath();
-            ctx.moveTo(x1, y1);
-            ctx.lineTo(x2, y2);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        anchors.fill: parent
-        antialiasing: true
-        renderTarget: Canvas.Image
-        renderStrategy: Canvas.Immediate
-        visible: fb.drawWidgetCut
-        onAvailableChanged: fb.requestWidgetBorderPaint()
-        onVisibleChanged: fb.requestWidgetBorderPaint()
-        onPaint: {
-            const ctx = getContext("2d");
-            ctx.clearRect(0, 0, width, height);
-            if (!fb.drawWidgetCut)
-                return ;
-
-            const k = fb.arcK;
-            const r = Math.max(0, fb.widgetCorner);
-            const topJoinR = Math.min(fb.widgetTopJoin, Math.max(0, fb.widgetRight - fb.widgetLeft) / 2);
-            ctx.save();
-            ctx.strokeStyle = cssColorWithAlpha(fb.widgetBorderColor, fb.widgetBorderAlpha);
-            ctx.lineWidth = fb.widgetBorderWidth;
-            ctx.lineCap = "butt";
-            ctx.lineJoin = "round";
-            ctx.beginPath();
-            if (root.frameWidgetAttachRight) {
-                const topStartX = Math.max(fb.holeX + fb.holeR, fb.widgetLeft - r);
-                ctx.moveTo(topStartX, fb.widgetFullTop);
-                ctx.bezierCurveTo(topStartX + r * k, fb.widgetFullTop, fb.widgetLeft, fb.widgetFullTop + r * (1 - k), fb.widgetLeft, fb.widgetFullTop + r);
-                ctx.lineTo(fb.widgetLeft, fb.widgetBottom - r);
-                ctx.bezierCurveTo(fb.widgetLeft, fb.widgetBottom - r * (1 - k), fb.widgetLeft + r * (1 - k), fb.widgetBottom, fb.widgetLeft + r, fb.widgetBottom);
-                ctx.lineTo(fb.holeRight - r, fb.widgetBottom);
-                ctx.bezierCurveTo(fb.holeRight - r * (1 - k), fb.widgetBottom, fb.holeRight, fb.widgetBottom + r * (1 - k), fb.holeRight, fb.widgetBottom + r);
-            } else {
-                const topStartX = Math.max(fb.holeX + fb.holeR, fb.widgetLeft - topJoinR);
-                ctx.moveTo(topStartX, fb.widgetFullTop);
-                ctx.bezierCurveTo(topStartX + topJoinR * k, fb.widgetFullTop, fb.widgetLeft, fb.widgetFullTop + topJoinR * (1 - k), fb.widgetLeft, fb.widgetFullTop + topJoinR);
-                ctx.lineTo(fb.widgetLeft, fb.widgetBottom - r);
-                ctx.bezierCurveTo(fb.widgetLeft, fb.widgetBottom - r * (1 - k), fb.widgetLeft + r * (1 - k), fb.widgetBottom, fb.widgetLeft + r, fb.widgetBottom);
-                ctx.lineTo(fb.widgetRight - r, fb.widgetBottom);
-                ctx.bezierCurveTo(fb.widgetRight - r * (1 - k), fb.widgetBottom, fb.widgetRight, fb.widgetBottom - r * (1 - k), fb.widgetRight, fb.widgetBottom - r);
-                ctx.lineTo(fb.widgetRight, fb.widgetFullTop + topJoinR);
-                ctx.bezierCurveTo(fb.widgetRight, fb.widgetFullTop + topJoinR * (1 - k), fb.widgetRight + topJoinR * (1 - k), fb.widgetFullTop, fb.widgetRight + topJoinR, fb.widgetFullTop);
-            }
-            ctx.stroke();
-            ctx.restore();
-            const fade = fb.widgetBorderFadeLength * Math.max(0, Math.min(1, fb._widgetReveal));
-            if (fade <= 0)
-                return ;
-
-            if (root.frameWidgetAttachRight) {
-                const topStartX = Math.max(fb.holeX + fb.holeR, fb.widgetLeft - r);
-                strokeFade(ctx, Math.max(fb.holeX + fb.holeR, topStartX - fade), fb.widgetFullTop, topStartX, fb.widgetFullTop, false);
-                strokeFade(ctx, fb.holeRight, fb.widgetBottom + r, fb.holeRight, Math.min(fb.holeBottom - fb.holeR, fb.widgetBottom + r + fade), true);
-            } else {
-                const topStartX = Math.max(fb.holeX + fb.holeR, fb.widgetLeft - topJoinR);
-                const topEndX = fb.widgetRight + topJoinR;
-                strokeFade(ctx, Math.max(fb.holeX + fb.holeR, topStartX - fade), fb.widgetFullTop, topStartX, fb.widgetFullTop, false);
-                strokeFade(ctx, topEndX, fb.widgetFullTop, Math.min(fb.holeRight - fb.holeR, topEndX + fade), fb.widgetFullTop, true);
-            }
-        }
+        frame: fb
     }
 
     Behavior on _widgetReveal {

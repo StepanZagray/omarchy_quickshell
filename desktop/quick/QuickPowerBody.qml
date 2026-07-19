@@ -1,29 +1,67 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
+import Quickshell.Io
 
-// Power detail panel — six native actions, no omarchy-menu indirection.
-// Lock uses hyprlock directly; the rest go through systemctl (login +
-// power) and Hyprland's IPC for logout. Keyboard: arrows / Tab cycle
-// the buttons, Enter activates the focused one.
+// Shared power action body used by the Omni quick tile and the standalone
+// system menu. It mirrors Omarchy's system menu and deliberately delegates
+// session-sensitive work to Omarchy's own commands.
 Item {
     id: body
+
     required property var root
     required property var shell
-    width: parent ? parent.width : 0
+    property int kbdIndex: 0
+    property bool suspendAvailable: true
+    property bool hibernateAvailable: false
+    // Primary column: Lock → Restart → Shutdown
+    readonly property var _primary: [{
+        "glyph": "󰌾",
+        "label": "LOCK",
+        "argv": ["omarchy-system-lock"],
+        "available": true
+    }, {
+        "glyph": "󰜉",
+        "label": "RESTART",
+        "argv": ["omarchy-system-reboot"],
+        "available": true
+    }, {
+        "glyph": "󰐥",
+        "label": "SHUTDOWN",
+        "argv": ["omarchy-system-shutdown"],
+        "available": true
+    }]
+    // Secondary 2×2: Screensaver | Logout / Hibernate | Suspend
+    // Unavailable actions stay visible but grayed out.
+    readonly property var _secondary: [{
+        "glyph": "󱄄",
+        "label": "SAVER",
+        "argv": ["omarchy-launch-screensaver", "force"],
+        "available": true
+    }, {
+        "glyph": "󰗽",
+        "label": "LOGOUT",
+        "argv": ["omarchy-system-logout"],
+        "available": true
+    }, {
+        "glyph": "󰋊",
+        "label": "HIBERNATE",
+        "argv": ["systemctl", "hibernate"],
+        "available": body.hibernateAvailable
+    }, {
+        "glyph": "󰤄",
+        "label": "SUSPEND",
+        "argv": ["systemctl", "suspend"],
+        "available": body.suspendAvailable
+    }]
+    readonly property var _actions: body._primary.concat(body._secondary)
 
     signal close()
 
-    implicitHeight: col.implicitHeight + 8
-
-    property int kbdIndex: 0
-    readonly property var _actions: [
-        { glyph: "󰌾", label: "LOCK",      cmd: "hyprlock" },
-        { glyph: "󰤄", label: "SUSPEND",   cmd: "systemctl suspend" },
-        { glyph: "󰋊", label: "HIBERNATE", cmd: "systemctl hibernate" },
-        { glyph: "󰗽", label: "LOGOUT",    cmd: "hyprctl dispatch exit" },
-        { glyph: "󰜉", label: "REBOOT",    cmd: "systemctl reboot" },
-        { glyph: "󰐥", label: "SHUTDOWN",  cmd: "systemctl poweroff" }
-    ]
+    function refreshAvailability() {
+        availabilityProbe.running = false;
+        availabilityProbe.running = true;
+    }
 
     function kbdHandle(event) {
         const k = event.key;
@@ -42,45 +80,94 @@ Item {
         }
         return false;
     }
+
     function _fire(a) {
-        if (body.shell && a && a.cmd) body.shell.run(a.cmd);
+        if (!a || !a.available)
+            return ;
+
         body.close();
+        if (a.argv)
+            Quickshell.execDetached(a.argv);
+
+    }
+
+    width: parent ? parent.width : 0
+    height: implicitHeight
+    implicitHeight: col.implicitHeight
+    Component.onCompleted: refreshAvailability()
+
+    Process {
+        id: availabilityProbe
+
+        running: false
+        command: ["bash", "-lc", "if omarchy-toggle-enabled suspend-off; then s=0; else s=1; fi; " + "if omarchy-hibernation-available; then h=1; else h=0; fi; " + "printf '%s|%s' \"$s\" \"$h\""]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const parts = this.text.trim().split("|");
+                body.suspendAvailable = parts[0] !== "0";
+                body.hibernateAvailable = parts[1] === "1";
+                body.kbdIndex = Math.min(body.kbdIndex, body._actions.length - 1);
+            }
+        }
+
     }
 
     Column {
         id: col
+
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.topMargin: 6
-        spacing: 10
+        spacing: 8
+        width: parent.width
 
-        Text {
-            text: "POWER · " + (body.shell ? body.shell.batVal + "%" : "")
-                  + (body.shell && body.shell.batState !== "Unknown"
-                      ? "  ·  " + body.shell.batState.toUpperCase()
-                      : "")
-            color: body.root.inkDeep
-            font.family: body.root.mono
-            font.pixelSize: 10
-            font.letterSpacing: 2
+        Repeater {
+            model: body._primary
+
+            delegate: QuickButton {
+                required property var modelData
+                required property int index
+
+                root: body.root
+                glyph: modelData.glyph
+                label: modelData.label
+                enabled: modelData.available
+                selected: body.kbdIndex === index
+                width: parent.width
+                height: implicitHeight
+                onClicked: body._fire(modelData)
+            }
+
         }
 
-        Flow {
+        Grid {
+            columns: 2
+            columnSpacing: 8
+            rowSpacing: 8
             width: parent.width
-            spacing: 8
+
             Repeater {
-                model: body._actions
+                model: body._secondary
+
                 delegate: QuickButton {
                     required property var modelData
                     required property int index
+
                     root: body.root
                     glyph: modelData.glyph
                     label: modelData.label
-                    selected: body.kbdIndex === index
+                    enabled: modelData.available
+                    selected: body.kbdIndex === body._primary.length + index
+                    width: (parent.width - parent.columnSpacing) / 2
+                    height: implicitHeight
                     onClicked: body._fire(modelData)
                 }
+
             }
+
         }
+
     }
+
 }

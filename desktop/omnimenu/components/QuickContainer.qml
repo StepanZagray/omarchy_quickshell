@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import "../quick"
+import "../../quick"
 
 // Quick-mode container: tile grid on the left, optional detail panel
 // on the right when a tile is expanded. The grid compresses to a
@@ -67,9 +67,9 @@ Item {
                                     : Qt.rgba(qc.omni.ink.r, qc.omni.ink.g, qc.omni.ink.b, 0.03)
                         border.color: tileSlot.selected ? qc.omni.seal : qc.omni.sep
                         border.width: tileSlot.selected ? 2 : 1
-                        Behavior on color        { ColorAnimation  { duration: 50; easing.type: Easing.InOutCubic } }
-                        Behavior on border.color { ColorAnimation  { duration: 50; easing.type: Easing.InOutCubic } }
-                        Behavior on border.width { NumberAnimation { duration: 50; easing.type: Easing.InOutCubic } }
+                        Behavior on color        { ColorAnimation  { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic } }
+                        Behavior on border.color { ColorAnimation  { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic } }
+                        Behavior on border.width { NumberAnimation { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic } }
                     }
 
                     Column {
@@ -175,7 +175,7 @@ Item {
         height: visible ? Math.min(_wantHeight, _maxHeight) : 0
         clip: true
         Behavior on height {
-            NumberAnimation { duration: 60; easing.type: Easing.InOutCubic }
+            NumberAnimation { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic }
         }
 
         readonly property var t: qc.omni.expandedTile

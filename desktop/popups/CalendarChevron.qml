@@ -13,7 +13,7 @@ Text {
     color: chevronMouse.containsMouse ? hotColor : restColor
     font.family: root.mono
     font.pixelSize: 24
-    Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.InOutCubic } }
+    Behavior on color { ColorAnimation { duration: chevron.root.animationDuration; easing.type: Easing.InOutCubic } }
 
     MouseArea {
         id: chevronMouse

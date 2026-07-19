@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../data/Data.js" as Data
+import "../../data/OmniData.js" as Data
 
 // ps-driven process list, sorted by CPU. Selection drives a /proc-based
 // cmdline + stat preview; Enter sends SIGTERM via the parent's

@@ -218,7 +218,7 @@ App icons resolve via `Quickshell.iconPath()` for theme names and `file://` for 
 
 ## Adding palette entries
 
-Edit `omarchyItems` in `data/Data.js`. Each row is:
+Edit `omarchyItems` in `data/OmniData.js`. Each row is:
 
 ```js
 { title: "My Action", icon: "", category: "Style",
@@ -243,24 +243,24 @@ Everything lives under `desktop/`. `Desktop.qml` is the shell facade: the taskba
 | `state/OsdState.qml` | OSD logic, pamixer/brightnessctl, auto-hide. |
 | `state/InputState.qml` | Keyboard layout tracking for the bar language indicator. |
 | `quick/` | Quick-mode detail bodies and quick-panel controls. |
-| `services/` | App scan, bookmarks/history, file/GitHub/process/theme/tldr/chat providers. |
+| `services/` | Desktop-wide services shared by more than one feature. |
+| `omnimenu/services/` | App scan, bookmarks/history, and Omni search providers. |
 | `data/` | Static palette entries and theme-palette parsing helpers. |
 | `state/ChromeState.qml` | Tooltip anchors, popup anchors, frame-widget geometry. |
 | `shell/DesktopSurfaces.qml` | Per-monitor bar/popup/shell surface construction. |
 | `shell/DesktopIpc.qml` | Desktop shell IPC targets. |
 
-The palette is split between `OmniMenu.qml` (state, search, IPC, shortcuts, key handler, panel chrome) and the visual chunks in `omni/`:
+`OmniMenu.qml` is the stable public entry point and state coordinator. The implementation is grouped by responsibility in `omnimenu/`:
 
 | File | Owns |
 | --- | --- |
-| `omni/HeaderBar.qml` | Title row, breadcrumb, live result count, key-hint footer hint. |
-| `omni/SearchInput.qml` | Magnifier glyph, query text, blinking caret. Hidden in Quick mode. |
-| `omni/QuickContainer.qml` | Quick-mode tile grid + tile detail panel + the per-tile `QuickXxxBody` switch. |
-| `omni/ResultList.qml` | ListView and row delegate (icon, title, favourite star, category label). |
-| `omni/PreviewPane.qml` | Preview header and body for file / gh / proc / theme / tldr / chat modes. |
-| `omni/Footer.qml` | Exec line for the selected item. |
-| `omni/Format.js` | Markdown formatters for the tldr and chat previews. |
-| `omni/Tiles.js` | Quick-tile static data + dynamic builder against navbar telemetry. |
+| `omnimenu/SearchModel.qml` | Search index, filtering, ranking, and result cap. |
+| `omnimenu/ActionDispatcher.qml` | Row and Quick-tile command execution. |
+| `omnimenu/MenuSurface.qml` | Layer-shell windows and card composition. |
+| `omnimenu/KeyRouter.qml` | Keyboard navigation, preview scrolling, and clipboard shortcuts. |
+| `omnimenu/components/` | Header, input, Quick grid, result list, and preview pane. |
+| `omnimenu/data/` | Quick-tile data and preview formatting helpers. |
+| `omnimenu/services/` | Omni-only data providers and persistent state. |
 
 Common tweaks:
 
@@ -270,9 +270,9 @@ Common tweaks:
 | Workspace count | `Repeater { model: 10 ... }` in `bar/Bar.qml`. |
 | Bar font | `mono` / `serif` in `Desktop.qml`. |
 | Palette font | `mono` / `serif` in `OmniMenu.qml`. |
-| Palette result cap | `maxResults` in `OmniMenu.qml`. |
-| Score weights | `scPrefix`, `scTitle`, `scKw`, `scCat` in `OmniMenu.qml`. |
-| Quick-tile order / actions | `base` array in `omni/Tiles.js`. |
+| Palette result cap | `maxResults` in `omnimenu/SearchModel.qml`. |
+| Score weights | The four `*Score` properties in `omnimenu/SearchModel.qml`. |
+| Quick-tile order / actions | `base` array in `omnimenu/data/Tiles.js`. |
 | Telemetry interval | `Timer { interval: ... }` blocks in the matching `state/*State.qml`. |
 | Drift animation | `driftDelay` / `driftAnim` in `Theme.qml`. |
 | Shell motion (popups, OSD, tooltips) | `animationDuration` in `Theme.qml` — use with `Easing.InOutCubic`; see [extend.md](./extend.md#shell-motion). |

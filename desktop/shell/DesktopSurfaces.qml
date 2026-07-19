@@ -58,11 +58,32 @@ Item {
         }
     }
 
+    Variants {
+        id: notificationOverlays
+
+        property var shellRoot: root.shell
+
+        model: Quickshell.screens
+
+        delegate: NotificationOverlay {
+            required property var modelData
+
+            root: notificationOverlays.shellRoot
+            screen: modelData
+            shellScreenName: modelData.name
+            fallbackScreen: Quickshell.screens.length > 0 && modelData === Quickshell.screens[0]
+        }
+    }
+
     TooltipOverlay {
         root: root.shell
     }
 
     SystemPopup {
+        root: root.shell
+    }
+
+    PowerMenu {
         root: root.shell
     }
 

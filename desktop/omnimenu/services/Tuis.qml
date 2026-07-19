@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell.Io
-import "../data/Data.js" as Data
+import "../../data/OmniData.js" as Data
 
 // Probes a curated list of terminal-UI apps at startup and surfaces
 // only the ones actually on $PATH. Items launch via omarchy-launch-tui

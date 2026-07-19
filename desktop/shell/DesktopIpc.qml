@@ -81,6 +81,24 @@ Item {
     }
 
     IpcHandler {
+        target: "power"
+        function toggle(): void { root.shell.togglePowerMenu(); }
+        function open(): void { root.shell.openPowerMenu(); }
+        function close(): void { root.shell.powerMenuVisible = false; }
+    }
+
+    IpcHandler {
+        target: "notifications"
+        function dismiss(): void { root.shell.dismissLastNotification(); }
+        function dismissAll(): void { root.shell.dismissAllNotifications(); }
+        function invoke(): void { root.shell.invokeLastNotification(); }
+        function restore(): void { root.shell.restoreLastNotification(); }
+        function toggleSilent(): void { root.shell.toggleNotificationSilence(); }
+        function count(): int { return root.shell.notificationCount; }
+        function isSilent(): bool { return root.shell.notificationsSilent; }
+    }
+
+    IpcHandler {
         target: "osd"
         function volumeRaise(): void { root.osd.volumeRaise(); }
         function volumeLower(): void { root.osd.volumeLower(); }

@@ -123,7 +123,7 @@ Item {
                 font.family: body.root.mono
                 font.pixelSize: 10
                 font.letterSpacing: 2
-                Behavior on color { ColorAnimation { duration: 140; easing.type: Easing.InOutCubic } }
+                Behavior on color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
             }
             Row {
                 anchors.left: parent.left

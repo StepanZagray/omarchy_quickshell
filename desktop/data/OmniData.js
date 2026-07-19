@@ -107,7 +107,7 @@ const omarchyItems = [
     { title: "Wi-Fi Picker", icon: "󰖩", category: "Quick", keywords: "wifi wireless network connect picker chooser ssid signal nmcli", exec: "omarchy-launch-wifi" },
     { title: "Bluetooth Picker", icon: "󰂯", category: "Quick", keywords: "bluetooth bt pair connect device picker headset speaker keyboard mouse", exec: "omarchy-launch-bluetooth" },
     { title: "System Monitor", icon: "󰍛", category: "Quick", keywords: "cpu memory process monitor btop top htop performance load activity", exec: "omarchy-launch-or-focus-tui btop" },
-    { title: "Power Menu", icon: "󰐥", category: "Quick", keywords: "power menu battery suspend hibernate logout restart reboot shutdown lock", exec: "omarchy-menu power" },
+    { title: "Power Menu", icon: "󰐥", category: "Quick", keywords: "power menu battery suspend hibernate logout restart reboot shutdown lock", exec: "qs -c desktop ipc call power open" },
 
     // ----- Style -----
     { title: "Theme", icon: "󰸌", category: "Style", keywords: "theme color palette dark light mode appearance look style scheme switcher kanagawa tokyo dragon nord gruvbox", exec: "omarchy-menu theme" },
@@ -195,7 +195,7 @@ const omarchyItems = [
     { title: "Reset Waybar Config", icon: "󰍜", category: "Update", keywords: "reset default config waybar bar restore", exec: "omarchy-refresh-waybar" },
     { title: "Restart Hypridle", icon: "󰜉", category: "Update", keywords: "restart hypridle idle service process reload", exec: "omarchy-restart-hypridle" },
     { title: "Restart Hyprsunset", icon: "󰜉", category: "Update", keywords: "restart hyprsunset nightlight service process reload", exec: "omarchy-restart-hyprsunset" },
-    { title: "Restart Mako", icon: "󰎟", category: "Update", keywords: "restart mako notifications dunst service reload", exec: "omarchy-restart-mako" },
+    { title: "Clear Notifications", icon: "󰎟", category: "Update", keywords: "clear dismiss notifications service", exec: "qs -c desktop ipc call notifications dismissAll" },
     { title: "Restart Swayosd", icon: "󰜉", category: "Update", keywords: "restart swayosd osd service reload", exec: "omarchy-restart-swayosd" },
     { title: "Restart Walker", icon: "󰌧", category: "Update", keywords: "restart walker launcher service reload", exec: "omarchy-restart-walker" },
     { title: "Restart Waybar", icon: "󰍜", category: "Update", keywords: "restart waybar bar service reload", exec: "omarchy-restart-waybar" },
@@ -205,7 +205,7 @@ const omarchyItems = [
     { title: "Restart Trackpad", icon: "󰟸", category: "Update", keywords: "restart trackpad touchpad pointer reload service", exec: "omarchy-restart-trackpad" },
 
     // ----- System -----
-    { title: "Lock Screen", icon: "󰌾", category: "System", keywords: "lock screen security hyprlock password", exec: "omarchy-lock-screen" },
+    { title: "Lock Screen", icon: "󰌾", category: "System", keywords: "lock screen security hyprlock password", exec: "omarchy-system-lock" },
     { title: "Force Screensaver", icon: "󱄄", category: "System", keywords: "screensaver force start show idle", exec: "omarchy-launch-screensaver force" },
     { title: "Suspend", icon: "󰒲", category: "System", keywords: "suspend sleep power down ram s3", exec: "systemctl suspend" },
     { title: "Hibernate", icon: "󰤁", category: "System", keywords: "hibernate disk power down s4 swap", exec: "systemctl hibernate" },
@@ -217,7 +217,7 @@ const omarchyItems = [
     { title: "Toggle Screensaver", icon: "󱄄", category: "Toggle", keywords: "toggle screensaver enable disable on off", exec: "omarchy-toggle-screensaver" },
     { title: "Toggle Nightlight", icon: "󰔎", category: "Toggle", keywords: "toggle nightlight blue light filter warm color temperature hyprsunset", exec: "omarchy-toggle-nightlight" },
     { title: "Toggle Idle Lock", icon: "󱫖", category: "Toggle", keywords: "toggle idle lock auto away timeout", exec: "omarchy-toggle-idle" },
-    { title: "Toggle Notifications", icon: "󰂛", category: "Toggle", keywords: "toggle notifications silence mute mako dnd", exec: "omarchy-toggle-notification-silencing" },
+    { title: "Toggle Notifications", icon: "󰂛", category: "Toggle", keywords: "toggle notifications silence mute dnd", exec: "qs -c desktop ipc call notifications toggleSilent" },
     { title: "Toggle Top Bar", icon: "󰍜", category: "Toggle", keywords: "toggle waybar top bar show hide visibility", exec: "omarchy-toggle-waybar" },
     { title: "Toggle Workspace Layout", icon: "󱂬", category: "Toggle", keywords: "toggle workspace layout dwindle master tile hyprland", exec: "omarchy-hyprland-workspace-layout-toggle" },
     { title: "Toggle Window Gaps", icon: "󱂩", category: "Toggle", keywords: "toggle gaps window spacing hyprland margin", exec: "omarchy-hyprland-window-gaps-toggle" },

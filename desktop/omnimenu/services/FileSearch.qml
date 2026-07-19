@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../data/Data.js" as Data
+import "../../data/OmniData.js" as Data
 
 // fd-backed file search + file preview. Owns the fd Process, its
 // debounce, the head/stat preview procs, and the preview state. The

@@ -1,6 +1,6 @@
 import QtQuick
-import "../data/Data.js" as Data
-import "Format.js" as Fmt
+import "../../data/OmniData.js" as Data
+import "../data/Format.js" as Fmt
 
 // Right-side preview pane. Shown when one of the preview-bearing modes
 // (file, gh, proc, theme, tldr, chat) is active. Surfaces a header

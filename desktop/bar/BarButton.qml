@@ -37,7 +37,7 @@ Item {
 
         Behavior on color {
             ColorAnimation {
-                duration: 180
+                duration: btn.root.animationDuration
                 easing.type: Easing.InOutCubic
             }
 
@@ -132,7 +132,7 @@ Item {
 
                         Behavior on color {
                             ColorAnimation {
-                                duration: 200
+                                duration: btn.root.animationDuration
                                 easing.type: Easing.InOutCubic
                             }
 
@@ -156,7 +156,7 @@ Item {
             target: row
             property: "pulse"
             to: 0.25
-            duration: 520
+            duration: btn.root.animationDuration * 3
             easing.type: Easing.InOutCubic
         }
 
@@ -164,7 +164,7 @@ Item {
             target: row
             property: "pulse"
             to: 1
-            duration: 520
+            duration: btn.root.animationDuration * 3
             easing.type: Easing.InOutCubic
         }
 

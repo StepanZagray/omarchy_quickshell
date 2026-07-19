@@ -57,7 +57,7 @@ PanelWindow {
                 id: clockOneLine
 
                 anchors.centerIn: parent
-                anchors.verticalCenterOffset: -1
+                anchors.verticalCenterOffset: 0
                 text: bar.root.hh + ":" + bar.root.mm + " " + bar.root.dd + " " + bar.root.mon
                 color: clockMouse.containsMouse ? bar.root.seal : bar.root.ink
                 font.family: bar.root.mono
@@ -67,7 +67,7 @@ PanelWindow {
 
                 Behavior on color {
                     ColorAnimation {
-                        duration: 180
+                        duration: bar.root.animationDuration
                         easing.type: Easing.InOutCubic
                     }
 

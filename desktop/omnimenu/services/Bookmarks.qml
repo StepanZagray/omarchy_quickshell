@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../data/Data.js" as Data
+import "../../data/OmniData.js" as Data
 
 // Persistent favourites + history under $XDG_CACHE. Ctrl+S stars,
 // item activation records, both arrays serialize to one JSON file.
