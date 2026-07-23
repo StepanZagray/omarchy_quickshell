@@ -7,10 +7,14 @@ Item {
     required property var shell
     // Desktop frame state. Visuals are click-through and rendered by FrameBorder.
     readonly property int frameThickness: 4
-    readonly property int frameRounding: 6
+    // Window rounding is 6 (hypr); sides/bottom leave (gaps_out - frameThickness)
+    // = 3px to the window. frameRounding is the hole corner's edge span
+    // (windowR + gap). The curve itself is an offset of the window squircle
+    // in FrameBorder — not a larger superellipse — so the gap stays constant.
+    readonly property int frameRounding: 9
     // Shared by CardWindow reveal and FrameBorder widget morph.
     readonly property int frameAnimationDuration: shell.theme.animationDuration
-    readonly property color frameBg: Qt.rgba(shell.bg.r, shell.bg.g, shell.bg.b, 0.8)
+    readonly property color frameBg: Qt.rgba(shell.bg.r, shell.bg.g, shell.bg.b, 0.7)
     property bool frameWidgetVisible: false
     property string frameWidgetOwner: ""
     property real frameWidgetX: 0
@@ -18,6 +22,8 @@ Item {
     property real frameWidgetWidth: 0
     property real frameWidgetHeight: 0
     property bool frameWidgetAttachRight: false
+    property bool frameWidgetAttachLeft: false
+    property bool frameWidgetAttachBottom: false
     property string frameWidgetScreen: ""
     property string tooltipText: ""
     property real tooltipBarX: 0
@@ -65,9 +71,10 @@ Item {
         if (!root.focusedMonitorName || !root.popupAnchorScreen)
             return ;
 
-        if ((shell.calendarVisible || shell.mediaVisible) && root.focusedMonitorName !== root.popupAnchorScreen) {
+        if ((shell.calendarVisible || shell.mediaVisible || shell.powerMenuVisible) && root.focusedMonitorName !== root.popupAnchorScreen) {
             shell.calendarVisible = false;
             shell.mediaVisible = false;
+            shell.powerMenuVisible = false;
         }
     }
 }

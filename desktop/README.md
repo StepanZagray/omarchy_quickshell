@@ -238,8 +238,7 @@ Everything lives under `desktop/`. `Desktop.qml` is the shell facade: the taskba
 | --- | --- |
 | `Desktop.qml` | Shell facade, theme pass-through, icon constants, state wiring. |
 | `bar/` | Taskbar (`Bar`, `Module`, `Workspace`, …). |
-| `popups/` | Card-window surfaces and popup-only controls. |
-| `shell/OsdSurfaces.qml` | Per-monitor OSD toasts (volume, brightness, caps, mic, touchpad). |
+| `popups/` | Card-window surfaces and popup-only controls (`OsdPopup`, media, calendar, …). |
 | `state/OsdState.qml` | OSD logic, pamixer/brightnessctl, auto-hide. |
 | `state/InputState.qml` | Keyboard layout tracking for the bar language indicator. |
 | `quick/` | Quick-mode detail bodies and quick-panel controls. |

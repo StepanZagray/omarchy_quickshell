@@ -102,12 +102,10 @@ PanelWindow {
                 onClicked: {
                     clockTipDelay.stop();
                     bar.root.hideTooltip("Calendar");
-                    bar.root.popupAnchorScreen = bar.shellScreenName;
-                    bar.root.frameWidgetScreen = bar.root.popupAnchorScreen;
                     if (bar.root.calendarVisible)
                         bar.root.calendarVisible = false;
                     else
-                        bar.root.openCalendar();
+                        bar.root.openCalendar(bar.shellScreenName);
                 }
             }
 
@@ -181,12 +179,10 @@ PanelWindow {
                 tooltip: bar.root.musicTitle.length > 0 ? (bar.root.musicArtist.length > 0 ? bar.root.musicTitle + " - " + bar.root.musicArtist : "Media · " + bar.root.musicTitle) : "Media"
                 onActivated: {
                     bar.root.mediaAnchorItem = mediaMod;
-                    bar.root.popupAnchorScreen = bar.shellScreenName;
-                    bar.root.frameWidgetScreen = bar.root.popupAnchorScreen;
                     if (bar.root.mediaVisible)
                         bar.root.mediaVisible = false;
                     else
-                        bar.root.openMedia();
+                        bar.root.openMedia(bar.shellScreenName);
                 }
                 onRightActivated: bar.root.musicNext()
             }

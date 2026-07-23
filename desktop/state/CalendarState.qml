@@ -132,14 +132,16 @@ Item {
         return "";
     }
 
-    function openCalendar() {
+    function openCalendar(screenName) {
         if (shell.calendarAnchorItem)
             shell.anchorPopupTo(shell.calendarAnchorItem);
 
-        if (!shell.popupAnchorScreen)
-            shell.popupAnchorScreen = shell.focusedScreenName();
-
-        shell.frameWidgetScreen = shell.popupAnchorScreen;
+        // Prefer an explicit screen (bar click on that monitor); otherwise the
+        // focused monitor. Never reuse a stale popupAnchorScreen from another
+        // widget / earlier open.
+        const screen = (screenName && screenName.length > 0) ? screenName : shell.focusedScreenName();
+        shell.popupAnchorScreen = screen;
+        shell.frameWidgetScreen = screen;
         root.calendarMonthOffset = 0;
         root.calendarTick++;
         root.selectedDay = (new Date()).getDate();

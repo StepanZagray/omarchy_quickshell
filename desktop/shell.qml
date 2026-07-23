@@ -21,6 +21,10 @@ ShellRoot {
         id: desktop
         theme: theme
         onPaletteToggleRequested: omni.toggle()
+        onPopupOpening: {
+            if (omni.visible_)
+                omni.close();
+        }
     }
     OmniMenu { id: omni; theme: theme; desktop: desktop }
 }

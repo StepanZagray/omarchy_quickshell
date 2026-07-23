@@ -45,7 +45,13 @@ PanelWindow {
     readonly property int bodyPaddingVertical: bodyPaddingTop + bodyPaddingBottom
     property bool frameAttached: false
     property bool frameAttachRight: false
+    property bool frameAttachLeft: false
+    property bool frameAttachBottom: false
     property string frameScreenName: ""
+    // OSD toasts must not steal keyboard focus from the active window.
+    property bool exclusiveFocus: true
+    // When false, the fullscreen overlay stays click-through (toast-style).
+    property bool captureInput: true
     // Anchored placement. anchored=true places widgets below the top bar,
     // centred on anchorBarX; anchored=false centres the card on screen.
     // The Scale origin tracks the trigger so a clamped card still feels
@@ -54,9 +60,13 @@ PanelWindow {
     property real anchorBarX: 0
     property real anchorGap: 8
     readonly property real frameInset: 0
-    readonly property real frameTopInset: frameAttached ? -1 : 0
+    readonly property real frameTopInset: frameAttached && !frameAttachBottom ? -1 : 0
     readonly property real frameRightInset: frameAttached && frameAttachRight ? 2 : 0
-    readonly property real joinRadius: frameAttached ? theme.frameRounding * 1.5 : 0
+    readonly property real frameLeftInset: frameAttached && frameAttachLeft ? 2 : 0
+    readonly property real frameBottomInset: frameAttached && frameAttachBottom ? 2 : 0
+    // Integer so body margins stay pixel-aligned. Fractional insets put radius:N
+    // rects on half-pixels and stair-step their corners (very visible on OSD).
+    readonly property int joinRadius: frameAttached ? Math.round(theme.frameRounding * 1.5) : 0
     readonly property color surfaceColor: frameAttached ? theme.frameBg : theme.bg
     readonly property real contentReveal: _contentReveal
     readonly property bool _anchored: anchored
@@ -117,6 +127,8 @@ PanelWindow {
             card.theme.frameWidgetWidth = surface.width;
             card.theme.frameWidgetHeight = surface.height;
             card.theme.frameWidgetAttachRight = card.frameAttachRight;
+            card.theme.frameWidgetAttachLeft = card.frameAttachLeft;
+            card.theme.frameWidgetAttachBottom = card.frameAttachBottom;
             card.theme.frameWidgetScreen = card.frameScreenName.length > 0 ? card.frameScreenName : (card.screen ? card.screen.name : card.theme.frameWidgetScreen);
             card.theme.frameWidgetVisible = true;
         } else if (!card.revealed && card.theme.frameWidgetOwner === card.layerNamespace) {
@@ -127,10 +139,10 @@ PanelWindow {
     visible: revealed || _closing || _reveal > 0.001 || revealAnim.running
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
-    mask: ((revealed || _closing || revealAnim.running) && _layoutReady) ? null : emptyRegion
+    mask: (captureInput && (revealed || _closing || revealAnim.running) && _layoutReady) ? null : emptyRegion
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: layerNamespace
-    WlrLayershell.keyboardFocus: (revealed && _layoutReady) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: (revealed && _layoutReady && exclusiveFocus) ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     onRevealedChanged: {
         if (!card.revealed) {
             card._closing = true;
@@ -173,7 +185,7 @@ PanelWindow {
 
     MouseArea {
         anchors.fill: parent
-        enabled: card.revealed && card._layoutReady
+        enabled: card.captureInput && card.revealed && card._layoutReady
         onClicked: card.dismiss()
     }
 
@@ -187,21 +199,30 @@ PanelWindow {
         onWidthChanged: card.publishFrameSurface()
         onHeightChanged: card.publishFrameSurface()
         x: {
+            let px = 0;
             if (!card._anchored)
-                return (parent.width - width) / 2;
-
-            if (card.frameAttached && card.frameAttachRight)
-                return parent.width - width - card.theme.frameThickness - card.frameRightInset;
-
-            const xAnchor = card.anchorBarX > 0 ? card.anchorBarX : parent.width / 2;
-            return Math.max(card.anchorGap, Math.min(parent.width - width - card.anchorGap, xAnchor - width / 2));
+                px = (parent.width - width) / 2;
+            else if (card.frameAttached && card.frameAttachRight)
+                px = parent.width - width - card.theme.frameThickness - card.frameRightInset;
+            else if (card.frameAttached && card.frameAttachLeft)
+                px = card.theme.frameThickness - card.frameLeftInset;
+            else {
+                const xAnchor = card.anchorBarX > 0 ? card.anchorBarX : parent.width / 2;
+                px = Math.max(card.anchorGap, Math.min(parent.width - width - card.anchorGap, xAnchor - width / 2));
+            }
+            return Math.round(px);
         }
         y: {
+            let py = 0;
             if (!card._anchored)
-                return (parent.height - height) / 2;
-
-            const gap = card.frameAttached ? card.frameTopInset : card.anchorGap;
-            return card.theme.barHeight + gap;
+                py = (parent.height - height) / 2;
+            else if (card.frameAttached && card.frameAttachBottom)
+                py = parent.height - height - card.theme.frameThickness - card.frameBottomInset;
+            else {
+                const gap = card.frameAttached ? card.frameTopInset : card.anchorGap;
+                py = card.theme.barHeight + gap;
+            }
+            return Math.round(py);
         }
         // Panel chrome fades by baking alpha into the fill/border. Item.opacity
         // on a layer-shell surface is easy to miss (and would also multiply the
@@ -261,10 +282,21 @@ PanelWindow {
                 if (card.frameAttached && card.frameAttachRight)
                     return surface.width;
 
+                if (card.frameAttached && card.frameAttachLeft)
+                    return 0;
+
                 const xAnchor = card.anchorBarX > 0 ? card.anchorBarX : card.width / 2;
                 return Math.max(0, Math.min(surface.width, xAnchor - surface.x));
             }
-            origin.y: card._anchored ? 0 : surface.height / 2
+            origin.y: {
+                if (!card._anchored)
+                    return surface.height / 2;
+
+                if (card.frameAttached && card.frameAttachBottom)
+                    return surface.height;
+
+                return 0;
+            }
             xScale: card._layoutReady
                     ? (card.frameAttached ? 1
                        : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal))
@@ -275,6 +307,23 @@ PanelWindow {
                     : card.revealScaleFrom
         }
 
+    }
+
+    Connections {
+        target: card.theme
+
+        function onFrameWidgetVisibleChanged() {
+            if (card.revealed && card.frameAttached && !card.theme.frameWidgetVisible)
+                card.publishFrameSurface();
+        }
+
+        function onFrameWidgetOwnerChanged() {
+            if (!card.revealed || !card.frameAttached)
+                return;
+
+            if (card.theme.frameWidgetOwner !== card.layerNamespace && !card.theme.frameWidgetVisible)
+                card.publishFrameSurface();
+        }
     }
 
     NumberAnimation {

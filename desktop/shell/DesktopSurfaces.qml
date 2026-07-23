@@ -1,14 +1,14 @@
-import QtQuick
-import Quickshell
 import "../bar"
 import "../popups"
+import QtQuick
+import Quickshell
 
 // Layer surfaces for the desktop shell: bar, frame, popups, tooltips.
-// OSD lives in OsdSurfaces.qml (separate concern).
 Item {
     id: root
 
     required property var shell
+    required property var osd
 
     Variants {
         id: shellVisuals
@@ -24,6 +24,7 @@ Item {
             screen: modelData
             shellScreenName: modelData.name
         }
+
     }
 
     Variants {
@@ -40,6 +41,7 @@ Item {
             screen: modelData
             shellScreenName: modelData.name
         }
+
     }
 
     Variants {
@@ -56,6 +58,7 @@ Item {
             screen: modelData
             visible: false
         }
+
     }
 
     Variants {
@@ -73,6 +76,7 @@ Item {
             shellScreenName: modelData.name
             fallbackScreen: Quickshell.screens.length > 0 && modelData === Quickshell.screens[0]
         }
+
     }
 
     TooltipOverlay {
@@ -83,8 +87,21 @@ Item {
         root: root.shell
     }
 
-    PowerMenu {
-        root: root.shell
+    Variants {
+        id: powerMenuPopups
+
+        property var shellRoot: root.shell
+
+        model: Quickshell.screens
+
+        delegate: PowerMenuPopup {
+            required property var modelData
+
+            root: powerMenuPopups.shellRoot
+            screen: modelData
+            shellScreenName: modelData.name
+        }
+
     }
 
     Variants {
@@ -101,6 +118,7 @@ Item {
             screen: modelData
             shellScreenName: modelData.name
         }
+
     }
 
     Variants {
@@ -117,6 +135,26 @@ Item {
             screen: modelData
             shellScreenName: modelData.name
         }
+
+    }
+
+    Variants {
+        id: osdPopups
+
+        property var shellRoot: root.shell
+        property var osdRef: root.osd
+
+        model: Quickshell.screens
+
+        delegate: OsdPopup {
+            required property var modelData
+
+            root: osdPopups.shellRoot
+            osd: osdPopups.osdRef
+            screen: modelData
+            shellScreenName: modelData.name
+        }
+
     }
 
     Variants {
@@ -133,6 +171,7 @@ Item {
             screen: modelData
             shellScreenName: modelData.name
         }
+
     }
 
     ScreenshotsPopup {
@@ -150,4 +189,5 @@ Item {
     DisplayPopup {
         root: root.shell
     }
+
 }

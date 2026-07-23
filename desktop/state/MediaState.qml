@@ -12,14 +12,16 @@ Item {
     property string musicArtUrl: ""
     property bool musicPlaying: false
 
-    function openMedia() {
+    function openMedia(screenName) {
         if (shell.mediaAnchorItem)
             shell.anchorPopupTo(shell.mediaAnchorItem);
 
-        if (!shell.popupAnchorScreen)
-            shell.popupAnchorScreen = shell.focusedScreenName();
-
-        shell.frameWidgetScreen = shell.popupAnchorScreen;
+        // Prefer an explicit screen (bar click on that monitor); otherwise the
+        // focused monitor. Never reuse a stale popupAnchorScreen from another
+        // widget / earlier open.
+        const screen = (screenName && screenName.length > 0) ? screenName : shell.focusedScreenName();
+        shell.popupAnchorScreen = screen;
+        shell.frameWidgetScreen = screen;
         root.refreshMusic();
         root.mediaVisible = true;
     }

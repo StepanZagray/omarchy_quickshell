@@ -273,6 +273,9 @@ Item {
     readonly property string homeDir: Quickshell.env("HOME")
 
     function open() {
+        if (root.desktop)
+            root.desktop.closeAllPopups();
+
         root.query = "";
         root.selectedIndex = 0;
         root.categoryFilter = "";
