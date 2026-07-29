@@ -17,7 +17,7 @@ CardWindow {
     revealed: root.powerMenuVisible && powerMenuPopup.targetScreen
     frameScreenName: powerMenuPopup.shellScreenName
     cardWidth: 256
-    contentOpenDelayFactor: 1
+    contentOpenDelayFactor: 0
     contentOpenDurationFactor: 1
     contentCloseDurationFactor: 0.6
     bodyPaddingTop: 16
@@ -49,7 +49,6 @@ CardWindow {
         width: parent.width
         root: powerMenuPopup.root
         shell: powerMenuPopup.root
-        opacity: powerMenuPopup.contentReveal
         onClose: powerMenuPopup.root.powerMenuVisible = false
 
         transform: Translate {

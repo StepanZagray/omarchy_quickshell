@@ -27,6 +27,8 @@ Item {
         };
     }
 
+    // Prefer Desktop.requestCloseNotification so cards can play close glitch.
+    // These remain as immediate fallbacks for any direct callers.
     function dismissLast() {
         const list = service.values();
         if (list.length === 0)

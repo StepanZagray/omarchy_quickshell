@@ -1,5 +1,5 @@
 import QtQuick
-import "../popups"
+import "../popups"  // DisplaySlider
 
 // Display detail — sliders + preset chips + monitor info + actions.
 // Reuses the navbar's existing displayRow state so the embedded panel
@@ -114,7 +114,7 @@ Item {
 
         Item {
             width: parent.width
-            height: 38
+            height: 52
             Text {
                 anchors.left: parent.left
                 anchors.top: parent.top
@@ -128,16 +128,17 @@ Item {
             Row {
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
-                spacing: 6
+                spacing: 8
                 Repeater {
                     model: body.shell ? body.shell.displayPresets : []
-                    delegate: DisplayChip {
+                    delegate: QuickButton {
                         required property var modelData
                         required property int index
                         root: body.root
                         label: modelData.label
+                        padH: 12
                         selected: body.shell && body.shell.selectedPreset === index
-                        onActivated: {
+                        onClicked: {
                             if (!body.shell) return;
                             body.shell.selectedPreset = index;
                             body.shell.displayRow = 3;
@@ -165,40 +166,44 @@ Item {
 
         Item {
             width: parent.width
-            height: 28
-            DisplayChip {
+            height: 32
+            QuickButton {
                 root: body.root
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 label: "EDIT MONITORS"
+                padH: 12
                 selected: body.shell && body.shell.displayRow === 4
-                onActivated: {
+                onClicked: {
                     if (!body.shell) return;
                     body.shell.displayRow = 4;
                     body.shell.run("omarchy-launch-editor ~/.config/hypr/monitors.lua");
                     body.close();
                 }
             }
-            DisplayChip {
+            QuickButton {
                 root: body.root
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
-                label: (body.shell ? body.shell.icoPower : "") + " BLANK"
+                glyph: body.shell ? body.shell.icoPower : ""
+                label: "BLANK"
+                padH: 12
                 selected: body.shell && body.shell.displayRow === 5
-                onActivated: {
+                onClicked: {
                     if (!body.shell) return;
                     body.shell.displayRow = 5;
                     body.shell.blankScreen();
                     body.close();
                 }
             }
-            DisplayChip {
+            QuickButton {
                 root: body.root
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 label: "RESET"
+                padH: 12
                 selected: body.shell && body.shell.displayRow === 6
-                onActivated: {
+                onClicked: {
                     if (!body.shell) return;
                     body.shell.displayRow = 6;
                     body.shell.resetDisplay();

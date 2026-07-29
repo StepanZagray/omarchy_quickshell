@@ -43,6 +43,8 @@ Item {
     readonly property string serif: theme.serif
 
     readonly property int cornerRadius: theme.cornerRadius
+    readonly property int popupCornerRadius: theme.popupCornerRadius
+    readonly property real popupCornerPower: theme.popupCornerPower
     readonly property int animationDuration: theme.animationDuration
 
     // Sources that feed `allItems`. AppScan reads .desktop files;

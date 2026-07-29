@@ -22,6 +22,10 @@ Item {
     readonly property string cornerStatePath: Quickshell.env("HOME") + "/.local/state/quickshell-desktop/corners"
     property int cornerRadius: 6
     readonly property bool round: cornerRadius > 0
+    // Outer popup silhouettes match FrameBorder's 16px fourth-power free
+    // corners. Inner controls keep using the tighter cornerRadius above.
+    readonly property int popupCornerRadius: round ? 16 : 0
+    readonly property real popupCornerPower: 4
 
     function setCorners(mode) {
         const want = (mode === "round" || mode === true || mode === 6) ? 6 : 0;
@@ -56,7 +60,7 @@ Item {
 
     // Standard motion duration for popups, OSD, frame morph, tooltips, and
     // other shell reveal/fade surfaces. Pair with Easing.InOutCubic.
-    property int animationDuration: 200
+    property int animationDuration: 300
 
     readonly property color bg:     Qt.rgba(paper.r, paper.g, paper.b, 0.70)
     readonly property color fg:     ink

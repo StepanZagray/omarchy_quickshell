@@ -12,7 +12,7 @@ CardWindow {
     revealed: root.calendarVisible && calendarPopup.targetScreen
     frameScreenName: calendarPopup.shellScreenName
     cardWidth: 322
-    contentOpenDelayFactor: 1
+    contentOpenDelayFactor: 0
     contentOpenDurationFactor: 1
     contentCloseDurationFactor: 0.6
     bodyPaddingBottom: 16
@@ -32,8 +32,6 @@ CardWindow {
     Column {
         width: parent.width
         spacing: 12
-        opacity: calendarPopup.contentReveal
-
         PopupHeader {
             root: calendarPopup.root
             title: calendarPopup.root.calendarMonthName

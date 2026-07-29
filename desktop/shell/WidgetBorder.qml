@@ -1,10 +1,19 @@
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Window
 
 // Shared outline for every frame-attached popup. Calendar, media, power, and
 // OSD all use the same sampled n=4 superellipse, vector stroke, and rail fades;
 // only the edge-attachment geometry changes. Geometry comes from a PocketHost
 // slot so each popup morphs independently.
+//
+// The shadow is one ShaderEffect (shaders/pocketShadow.frag), not a set of
+// pieces: it evaluates the distance to the silhouette the frame actually paints
+// — pocket and frame unioned, filleted at the joins — and reads the same falloff
+// off it everywhere. A straight edge, a convex corner and an inverted join are
+// the same code, which is the point: every artefact this replaced came from a
+// boundary between two separate fills (band against join, notch against rail
+// strip, and a punch that ate the border pixel's density).
 Item {
     id: border
 
@@ -25,9 +34,23 @@ Item {
     readonly property bool attachLeft: pocket.attachLeft
     readonly property real borderAlpha: pocket.borderAlpha
     readonly property color lineColor: Qt.rgba(frame.widgetBorderColor.r, frame.widgetBorderColor.g, frame.widgetBorderColor.b, borderAlpha)
+    readonly property real shadowWidth: frame.widgetShadowWidth
+    readonly property real shadowAlpha: frame.widgetShadowMaxAlpha * Math.max(0, Math.min(1, reveal))
     readonly property bool drawCut: pocket.drawCut
     readonly property var outlinePoints: buildOutline()
     readonly property var fadeSegments: buildFades()
+    readonly property real railTaperHold: frame.widgetShadowJoinHold
+    // Device pixels, not logical ones: these monitors run at 1.6 and 2, and the
+    // shader edges its field against that grid.
+    readonly property real pixelRatio: Math.max(1, Screen.devicePixelRatio)
+    // Corner radii the pocket keeps. A corner standing on a rail is square — its
+    // fillet is the shader's rounded union with the frame. Order TL, TR, BR, BL.
+    readonly property vector4d convexRadii: attachBottomRight ? Qt.vector4d(radius, 0, 0, 0) : attachRight ? Qt.vector4d(0, 0, 0, radius) : attachLeft ? Qt.vector4d(0, 0, radius, 0) : Qt.vector4d(0, 0, radius, radius)
+    // The zone the shadow dissolves over, measured out from the pocket along the
+    // rail. It matches the outline's own fade run, started half a join earlier,
+    // so the two let go together instead of the shadow stopping on its own.
+    readonly property real railNear: topJoinRadius * railTaperHold
+    readonly property real railFar: railNear + frame.widgetBorderFadeLength
 
     function cssColorWithAlpha(color, alpha) {
         return "rgba(" + Math.round(color.r * 255) + ", " + Math.round(color.g * 255) + ", " + Math.round(color.b * 255) + ", " + alpha + ")";
@@ -47,8 +70,6 @@ Item {
         points.push(Qt.point(x, y));
     }
 
-    // Same corner construction as FrameBorder.strokeSquircleCorner(), emitted
-    // as points for Qt Quick Shapes instead of a raster Canvas path.
     function appendCorner(points, sx, sy, r, rot, clockwise) {
         if (r <= 0.001) {
             border.appendLine(points, sx, sy);
@@ -113,8 +134,6 @@ Item {
         return points;
     }
 
-    // Fade descriptors use increasing screen coordinates. startSolid selects
-    // whether the low-coordinate end begins opaque or transparent.
     function segment(vertical, position, start, end, startSolid) {
         return {
             "vertical": vertical,
@@ -167,6 +186,46 @@ Item {
     onLineWidthChanged: border.requestFadePaint()
     Component.onCompleted: border.requestPaints()
 
+    // The whole pocket shadow in one pass — see shaders/pocketShadow.frag. The
+    // field is continuous, so there are no pieces to tile and nothing to snap:
+    // the seams this replaced (band against join, notch against rail strip, and
+    // the punched border pixel) were all boundaries between separate fills.
+    ShaderEffect {
+        id: shadowLayer
+
+        // Pocket rect, with a glued edge sitting on its rail.
+        readonly property real pocketTop: border.attachBottomRight ? border.widgetTop : border.widgetFullTop
+        // How far past the pocket anything can still be drawn: the shadow depth,
+        // or the rail fade if that runs further.
+        readonly property real spill: Math.max(border.shadowWidth, border.railFar) + 2
+
+        // Whole device pixels. A ShaderEffect sitting on a fractional position
+        // makes the renderer resample what is underneath it — that softened the
+        // frame's own edge by half a pixel and read as a pale line tracing the
+        // border. The field does not move with the quad: it is placed by
+        // uOrigin/uSize, which follow whatever this rounds to.
+        x: Math.floor(Math.max(border.frame.holeX, border.widgetLeft - spill) * border.pixelRatio) / border.pixelRatio
+        y: Math.floor(Math.max(border.frame.holeY, pocketTop - spill) * border.pixelRatio) / border.pixelRatio
+        width: Math.ceil(Math.min(border.frame.holeRight, border.widgetRight + spill) * border.pixelRatio) / border.pixelRatio - x
+        height: Math.ceil(Math.min(border.frame.holeBottom, border.widgetBottom + spill) * border.pixelRatio) / border.pixelRatio - y
+        visible: border.drawCut && border.shadowAlpha > 0 && border.shadowWidth > 0 && width > 0 && height > 0
+        fragmentShader: "shaders/pocketShadow.frag.qsb"
+
+        property vector2d uSize: Qt.vector2d(width, height)
+        property vector2d uOrigin: Qt.vector2d(x, y)
+        property vector4d uPocket: Qt.vector4d(border.widgetLeft, pocketTop, border.widgetRight, border.widgetBottom)
+        property vector4d uRadii: border.convexRadii
+        property vector4d uHole: Qt.vector4d(border.frame.holeX, border.frame.holeY, border.frame.holeRight, border.frame.holeBottom)
+        property real uHoleRadius: border.frame.holeR
+        property real uJoinRadius: border.topJoinRadius
+        property real uDepth: border.shadowWidth
+        property real uMaxAlpha: border.shadowAlpha
+        property real uRailNear: border.railNear
+        property real uRailFar: border.railFar
+        property real uPixel: 1 / border.pixelRatio
+        property real uFalloffStrength: border.frame.widgetShadowFalloffStrength
+    }
+
     Shape {
         anchors.fill: parent
         preferredRendererType: Shape.CurveRenderer
@@ -188,9 +247,6 @@ Item {
 
     }
 
-    // Keep the long rail continuations as real stroked gradients. A 1px
-    // Rectangle gradient can disappear after layer blur/alpha composition;
-    // Canvas preserves line coverage and changes only the border alpha.
     Canvas {
         id: fadeCanvas
 

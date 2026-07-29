@@ -42,11 +42,16 @@ PanelWindow {
             model: overlay.root.notificationModel
 
             delegate: NotificationCard {
+                id: notificationCard
+
                 required property var modelData
 
                 width: stack.width
                 root: overlay.root
                 notification: modelData
+                glitchOriginX: (overlay.screen ? overlay.screen.width : overlay.width)
+                               - overlay.width + stack.x + notificationCard.x
+                glitchOriginY: stack.y + notificationCard.y
             }
         }
     }

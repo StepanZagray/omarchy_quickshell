@@ -87,46 +87,13 @@ Item {
             }
         }
 
-        Item {
+        QuickButton {
+            root: body.root
             width: parent.width
-            height: 30
-
-            Rectangle {
-                anchors.fill: parent
-                color: actionMouse.containsMouse || body.kbdIndex === 0
-                       ? Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.06)
-                       : "transparent"
-                border.width: 1
-                border.color: actionMouse.containsMouse || body.kbdIndex === 0 ? body.root.ink : body.root.sep
-            }
-            Text {
-                anchors.left: parent.left
-                anchors.leftMargin: 9
-                anchors.verticalCenter: parent.verticalCenter
-                text: "OPEN BTOP"
-                color: body.root.ink
-                font.family: body.root.mono
-                font.pixelSize: 10
-                font.letterSpacing: 2
-                font.weight: Font.Medium
-            }
-            Text {
-                anchors.right: parent.right
-                anchors.rightMargin: 9
-                anchors.verticalCenter: parent.verticalCenter
-                text: "DETAIL PROCESS VIEW"
-                color: body.root.inkDeep
-                font.family: body.root.mono
-                font.pixelSize: 10
-                font.letterSpacing: 1.2
-            }
-            MouseArea {
-                id: actionMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: body._launch()
-            }
+            glyph: "󰘚"
+            label: "OPEN BTOP"
+            selected: body.kbdIndex === 0
+            onClicked: body._launch()
         }
     }
 }

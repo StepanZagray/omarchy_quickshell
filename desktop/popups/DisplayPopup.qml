@@ -1,4 +1,5 @@
 import QtQuick
+import "../quick"
 
 CardWindow {
     id: displayPopup
@@ -65,7 +66,6 @@ CardWindow {
         id: dispCol
         width: parent.width
         spacing: 12
-        opacity: displayPopup.contentReveal
         transform: Translate {
             y: (1 - displayPopup.contentReveal) * -displayPopup.contentTravel
         }
@@ -114,7 +114,7 @@ CardWindow {
 
         Item {
             width: parent.width
-            height: 38
+            height: 52
 
             Text {
                 anchors.left: parent.left
@@ -130,17 +130,18 @@ CardWindow {
             Row {
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
-                spacing: 6
+                spacing: 8
 
                 Repeater {
                     model: displayPopup.root.displayPresets
-                    delegate: DisplayChip {
+                    delegate: QuickButton {
                         required property var modelData
                         required property int index
                         root: displayPopup.root
                         label: modelData.label
+                        padH: 12
                         selected: displayPopup.root.selectedPreset === index
-                        onActivated: {
+                        onClicked: {
                             displayPopup.root.selectedPreset = index;
                             displayPopup.root.displayRow = 3;
                             displayPopup.root.applyPreset(modelData);
@@ -168,34 +169,38 @@ CardWindow {
 
         Item {
             width: parent.width
-            height: 26
-            DisplayChip {
+            height: 32
+            QuickButton {
                 root: displayPopup.root
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 label: "EDIT MONITORS"
+                padH: 12
                 selected: displayPopup.root.displayRow === 4
-                onActivated: {
+                onClicked: {
                     displayPopup.root.displayRow = 4;
                     displayPopup.root.run("omarchy-launch-editor ~/.config/hypr/monitors.lua");
                     displayPopup.root.displayVisible = false;
                 }
             }
-            DisplayChip {
+            QuickButton {
                 root: displayPopup.root
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.verticalCenter: parent.verticalCenter
-                label: displayPopup.root.icoPower + " BLANK"
+                glyph: displayPopup.root.icoPower
+                label: "BLANK"
+                padH: 12
                 selected: displayPopup.root.displayRow === 5
-                onActivated: { displayPopup.root.displayRow = 5; displayPopup.root.blankScreen(); }
+                onClicked: { displayPopup.root.displayRow = 5; displayPopup.root.blankScreen(); }
             }
-            DisplayChip {
+            QuickButton {
                 root: displayPopup.root
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 label: "RESET"
+                padH: 12
                 selected: displayPopup.root.displayRow === 6
-                onActivated: { displayPopup.root.displayRow = 6; displayPopup.root.resetDisplay(); }
+                onClicked: { displayPopup.root.displayRow = 6; displayPopup.root.resetDisplay(); }
             }
         }
 

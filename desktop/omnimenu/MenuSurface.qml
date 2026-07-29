@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import "components" as Components
+import "../fx"
 
 // Owns the two layer-shell surfaces, card layout, and keyboard routing.
 // All behaviour is delegated through the public OmniMenu state object.
@@ -13,6 +14,61 @@ Item {
     required property var themes
     required property var bookmarks
     required property var ollamaChat
+
+    property bool shown: view.omni.visible_
+    property bool closing: false
+    property real reveal: 0
+    // Geometry remains full-size; a binary centre-out section mask constructs
+    // both of Omni's layer-shell surfaces.
+    readonly property real revealScaleFrom: 1
+    readonly property real revealScale: revealScaleFrom + (1 - revealScaleFrom) * reveal
+    readonly property real closeDurationFactor: 0.6
+    readonly property int closeDuration: Math.round(view.omni.animationDuration * closeDurationFactor)
+    readonly property bool transitionVisible: shown || closing
+                                                || contentTransition.effectActive
+    readonly property real frameTopInset: view.omni.desktop
+                                           ? view.omni.desktop.barInset : 0
+    readonly property real frameBottomInset: view.omni.desktop
+                                              ? view.omni.desktop.frameThickness : 0
+
+    function centeredCardY(containerHeight, cardHeight) {
+        const insideHeight = Math.max(0, containerHeight
+                                         - view.frameTopInset
+                                         - view.frameBottomInset);
+        return view.frameTopInset + Math.max(0, insideHeight - cardHeight) / 2;
+    }
+
+    function animateReveal(toValue, durationMs) {
+        revealAnim.stop();
+        revealAnim.from = view.reveal;
+        revealAnim.to = toValue;
+        revealAnim.duration = Math.max(1, durationMs);
+        revealAnim.start();
+    }
+
+    function openTransition() {
+        closeHold.stop();
+        view.closing = false;
+        const freshOpen = contentTransition.phase < 0.001;
+        view.animateReveal(1, view.omni.animationDuration);
+        contentTransition.open(freshOpen, 1);
+        bootGlitch.open(freshOpen);
+    }
+
+    function closeTransition() {
+        view.closing = true;
+        view.animateReveal(0, view.closeDuration);
+        contentTransition.close(view.closeDurationFactor);
+        bootGlitch.close();
+        closeHold.restart();
+    }
+
+    onShownChanged: {
+        if (shown)
+            openTransition();
+        else
+            closeTransition();
+    }
 
     KeyRouter {
         id: keyRouter
@@ -33,12 +89,12 @@ Item {
     // pixels across the whole monitor.
     PanelWindow {
         id: paletteGlass
-        visible: view.omni.visible_
+        visible: view.transitionVisible
         color: "transparent"
         implicitWidth: card.width
         implicitHeight: card.height
         anchors { top: true }
-        margins.top: screen ? screen.height * 0.18 : 0
+        margins.top: screen ? view.centeredCardY(screen.height, height) : 0
         exclusionMode: ExclusionMode.Ignore
         // The visual glass sits on Top while the fullscreen keyboard/input
         // layer remains Overlay, keeping all Omni content above this background.
@@ -47,27 +103,62 @@ Item {
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
         mask: Region {}
 
-        Rectangle {
+        Item {
+            id: paletteSurface
             anchors.fill: parent
-            color: view.omni.bg
-            radius: view.omni.cornerRadius
+            opacity: 1
+            scale: 1
+            layer.enabled: paletteGlass.visible && contentTransition.layerRequired
+            layer.smooth: false
+            layer.effect: ContentGlitch {
+                sectionReveal: true
+                progress: contentTransition.progress
+                quality: contentTransition.quality
+                resolutionPixels: contentTransition.resolutionPixels
+                seed: contentTransition.seed
+                splitStrength: contentTransition.splitStrength
+                splitPixels: contentTransition.splitPixels
+                visualScale: 1
+                corner: view.omni.popupCornerRadius
+                cornerPower: view.omni.popupCornerPower
+                accent: view.omni.seal
+            }
+
+            SquircleSurface {
+                anchors.fill: parent
+                color: view.omni.bg
+                radius: view.omni.popupCornerRadius
+                power: view.omni.popupCornerPower
+            }
+
+            BootGlitch {
+                id: bootGlitch
+                anchors.fill: parent
+                theme: view.omni.theme
+                corner: view.omni.popupCornerRadius
+                cornerPower: view.omni.popupCornerPower
+                visualScale: 1
+                resolutionPixels: contentTransition.resolutionPixels
+                originX: paletteGlass.screen ? (paletteGlass.screen.width - paletteGlass.width) / 2 : 0
+                originY: paletteGlass.screen
+                         ? view.centeredCardY(paletteGlass.screen.height,
+                                              paletteGlass.height)
+                         : 0
+                openDuration: view.omni.animationDuration
+                closeDurationFactor: view.closeDurationFactor
+            }
         }
     }
 
     PanelWindow {
         id: panel
-        visible: view.omni.visible_ || reveal > 0.001
+        visible: view.transitionVisible
         color: "transparent"
         anchors { top: true; bottom: true; left: true; right: true }
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "omni-menu-input"
         WlrLayershell.keyboardFocus: view.omni.visible_ ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-
-        property real reveal: view.omni.visible_ ? 1 : 0
-        // Open and close are both instant: SUPER+SPACE paints the palette on
-        // the very next frame, and dismissal drops it the same frame with no
-        // fade or scale-out lag.
 
         // The full-screen layer stays visually transparent; the card-sized
         // paletteGlass surface supplies compositor blur independently.
@@ -84,12 +175,12 @@ Item {
             onClicked: view.omni.close()
         }
 
-        Rectangle {
+        Item {
             id: card
             anchors.horizontalCenter: parent.horizontalCenter
-            // Card sits slightly above visual centre so the result list grows
-            // downward without dragging the search field out of the eyeline.
-            y: parent.height * 0.18
+            // Align the card's centre with the usable area inside the frame,
+            // accounting for the thicker top bar and the bottom frame rail.
+            y: view.centeredCardY(parent.height, height)
             // Wide in any preview-bearing mode (file, github, processes,
             // themes) so a ~520px preview pane fits next to the result
             // list; narrow 640 elsewhere — including Quick mode whether
@@ -105,12 +196,32 @@ Item {
             // displays; cardCol implicitHeight covers the search + list +
             // footer block.
             height: Math.min(cardCol.implicitHeight + 34, parent.height * 0.72)
-            color: "transparent"
-            border.color: view.omni.sep
-            border.width: 1
-            radius: view.omni.cornerRadius
             transformOrigin: Item.Center
-            scale: panel.reveal
+            scale: 1
+            layer.enabled: panel.visible && contentTransition.layerRequired
+            layer.smooth: false
+            layer.effect: ContentGlitch {
+                sectionReveal: true
+                progress: contentTransition.progress
+                quality: contentTransition.quality
+                resolutionPixels: contentTransition.resolutionPixels
+                seed: contentTransition.seed
+                splitStrength: contentTransition.splitStrength
+                splitPixels: contentTransition.splitPixels
+                visualScale: 1
+                corner: view.omni.popupCornerRadius
+                cornerPower: view.omni.popupCornerPower
+                accent: view.omni.seal
+            }
+
+            SquircleSurface {
+                anchors.fill: parent
+                color: "transparent"
+                borderColor: view.omni.sep
+                borderWidth: 1
+                radius: view.omni.popupCornerRadius
+                power: view.omni.popupCornerPower
+            }
 
             // Swallow clicks so the underlying dismiss MouseArea doesn't fire.
             MouseArea { anchors.fill: parent }
@@ -209,5 +320,28 @@ Item {
 
             }
         }
+    }
+
+    PopupGlitchTransition {
+        id: contentTransition
+
+        duration: view.omni.animationDuration
+        closeDurationFactor: view.closeDurationFactor
+        freeStanding: true
+    }
+
+    NumberAnimation {
+        id: revealAnim
+
+        target: view
+        property: "reveal"
+        easing.type: Easing.InOutCubic
+    }
+
+    Timer {
+        id: closeHold
+        interval: view.closeDuration + 40
+        repeat: false
+        onTriggered: view.closing = false
     }
 }

@@ -1,11 +1,14 @@
 // Desktop frame as one morphing filled path (visual only).
 // Attached widget backgrounds are cut into the workspace hole so the frame
 // itself changes form instead of drawing a separate widget shell.
-//
 // Each frame-attached popup owns an independent pocket slot. Geometry is
 // snapshotted into that slot — never live-bound to root.frameWidget* — so two
-// popups can open/close in parallel without lines jumping across the monitor.
+// popups can open/close in parallel. The hole boundary walks every open
+// pocket silhouette in a single even-odd fill (no overlay), so the old
+// rectangular hole edge cannot seam through an attached popup.
 
+import "../fx"
+import "../fx/PopupTiming.js" as PopupTiming
 import QtQuick
 import QtQuick.Shapes
 
@@ -38,6 +41,21 @@ Item {
     readonly property color widgetBorderColor: Qt.rgba(0.4, 0.4, 0.5, 0.32)
     readonly property real widgetBorderWidth: 1
     readonly property real widgetBorderFadeLength: 48
+    // Soft outward shadow, drawn entirely by WidgetBorder's one ShaderEffect
+    // (shaders/pocketShadow.frag) — nothing else in the shell draws shadow.
+    // Peak stays BELOW hypr ignore_alpha 0.65 on omarchy-shell-visual, so no
+    // shadow pixel is ever re-blurred into a solid rim.
+    readonly property real widgetShadowWidth: 14
+    readonly property real widgetShadowMaxAlpha: 0.3
+    // Gaussian falloff: slow at contact, strongest after the first few pixels,
+    // then a faint tail to widgetShadowWidth. Higher strength makes the middle
+    // drop stricter; width controls how long the tail remains visible.
+    readonly property real widgetShadowFalloffStrength: 8
+    // Where the shadow starts letting go, as a share of the join — 0 is the
+    // join's start, at the panel edge. The fade then runs the same length the
+    // outline's rail fade does (widgetBorderFadeLength), so shadow and border
+    // dissolve over one zone.
+    readonly property real widgetShadowJoinHold: 0
     // Match hypr looknfeel (do not edit hypr from here): rounding=6, sides
     // gaps_out - frameThickness = 3. Hole edge span is windowR+gap; the curve
     // itself is a Euclidean offset of the window squircle so the gap stays
@@ -58,90 +76,27 @@ Item {
     readonly property real holeRight: holeX + holeW
     readonly property real holeBottom: holeY + holeH
     readonly property bool drawWidgetCut: pocketA.drawCut || pocketB.drawCut
+    readonly property bool pixelatingPockets: pocketA.pixelating || pocketB.pixelating
+    // Full-display capture is intentional. A cropped replacement needs a hard
+    // compositing boundary, which remains visible against the translucent frame
+    // during coarse pixel stages.
+    layer.enabled: fb.pixelatingPockets
+    layer.smooth: false
+    layer.effect: ShaderEffect {
+        property var source
+        property vector2d uSize: Qt.vector2d(fb.width, fb.height)
+        property vector4d uRectA: pocketA.pixelating
+            ? Qt.vector4d(pocketA.pixelLeft, pocketA.pixelTop,
+                          pocketA.pixelWidth, pocketA.pixelHeight)
+            : Qt.vector4d(0, 0, 0, 0)
+        property vector4d uRectB: pocketB.pixelating
+            ? Qt.vector4d(pocketB.pixelLeft, pocketB.pixelTop,
+                          pocketB.pixelWidth, pocketB.pixelHeight)
+            : Qt.vector4d(0, 0, 0, 0)
+        property real uPixelsA: pocketA.pixelSize
+        property real uPixelsB: pocketB.pixelSize
 
-    // Independent morph slot. Geometry is written only when this slot is
-    // assigned to a popup — never rebound to live root.frameWidget* props.
-    component PocketHost: Item {
-        id: pocket
-
-        property string owner: ""
-        property string screenName: ""
-        property real fullLeft: 0
-        property real fullRight: 0
-        property real fullTop: 0
-        property real fullBottom: 0
-        property bool attachRight: false
-        property bool attachLeft: false
-        property bool attachBottom: false
-        property real reveal: 0
-        readonly property bool screenMatches: !screenName || !fb.shellScreenName || screenName === fb.shellScreenName
-        readonly property real fullWidth: Math.max(0, fullRight - fullLeft)
-        readonly property real fullHeight: Math.max(0, fullBottom - fullTop)
-        readonly property real morphCenter: attachRight ? fullRight : attachLeft ? fullLeft : (fullLeft + fullRight) / 2
-        readonly property bool edgeAttached: attachRight || attachLeft
-        readonly property real mediaReveal: 0.8 + 0.2 * reveal
-        readonly property real revealWidth: edgeAttached ? fullWidth * mediaReveal : fullWidth * (0.95 + 0.05 * reveal)
-        readonly property real widgetLeft: attachRight ? fullRight - revealWidth : attachLeft ? fullLeft : morphCenter - revealWidth / 2
-        readonly property real widgetRight: attachRight ? fullRight : attachLeft ? fullLeft + revealWidth : morphCenter + revealWidth / 2
-        readonly property real widgetTop: attachBottom ? fullBottom - fullHeight * reveal : fullTop
-        readonly property real widgetBottom: attachBottom ? fullBottom : fullTop + fullHeight * reveal
-        readonly property real widgetCorner: Math.min(fb.joinR, Math.max(0, (widgetRight - widgetLeft) / 2), Math.max(0, (widgetBottom - widgetTop) / 2))
-        readonly property bool drawCut: reveal > 0.001 && screenMatches && widgetRight - widgetLeft > 1 && widgetBottom - widgetTop > 1
-        readonly property real borderAlpha: fb.widgetBorderColor.a * Math.max(0, Math.min(1, reveal))
-
-        function setRevealInstant(value) {
-            revealBehavior.enabled = false;
-            pocket.reveal = value;
-            revealBehavior.enabled = true;
-        }
-
-        function openFresh() {
-            pocket.setRevealInstant(0);
-            pocket.reveal = 1;
-        }
-
-        function ensureOpen() {
-            pocket.reveal = 1;
-        }
-
-        function closeAnim() {
-            pocket.reveal = 0;
-        }
-
-        function applyGeometry(geo) {
-            pocket.fullLeft = geo.fullLeft;
-            pocket.fullRight = geo.fullRight;
-            pocket.fullTop = geo.fullTop;
-            pocket.fullBottom = geo.fullBottom;
-            pocket.attachRight = geo.attachRight;
-            pocket.attachLeft = geo.attachLeft;
-            pocket.attachBottom = geo.attachBottom;
-            pocket.screenName = geo.screenName;
-        }
-
-        // Owner stays until overwritten. Reuse keys off reveal <= 0.001 so an
-        // openFresh() instant-zero cannot wipe the owner mid-assign.
-        onRevealChanged: fb.requestPaints()
-        onDrawCutChanged: fb.requestPaints()
-        onWidgetLeftChanged: fb.requestPaints()
-        onWidgetRightChanged: fb.requestPaints()
-        onWidgetTopChanged: fb.requestPaints()
-        onWidgetBottomChanged: fb.requestPaints()
-
-        Behavior on reveal {
-            id: revealBehavior
-
-            NumberAnimation {
-                duration: fb.root.frameAnimationDuration
-                easing.type: Easing.InOutCubic
-            }
-        }
-
-        WidgetBorder {
-            anchors.fill: parent
-            frame: fb
-            pocket: pocket
-        }
+        fragmentShader: "shaders/pocketPixelate.frag.qsb"
     }
 
     // Unit quarter in local space: start (0,-1) → end (1,0), center at origin.
@@ -227,9 +182,95 @@ Item {
         }
     }
 
-    // Plain frame ring — pockets are filled independently on top so each popup
-    // morphs without rewriting the shared hole path.
-    function traceRing(ctx) {
+    function activePockets() {
+        const list = [];
+        if (pocketA.drawCut)
+            list.push(pocketA);
+
+        if (pocketB.drawCut)
+            list.push(pocketB);
+
+        return list;
+    }
+
+    function pocketKind(pocket) {
+        if (pocket.attachBottom && pocket.attachRight)
+            return "bottomRight";
+
+        if (pocket.attachRight)
+            return "right";
+
+        if (pocket.attachLeft)
+            return "left";
+
+        return "top";
+    }
+
+    // Free silhouette of a top-attached pocket, walked so a clockwise hole
+    // path can splice it into the top edge (enter at left join, exit at right).
+    function strokeTopPocketDetour(ctx, pocket) {
+        const L = pocket.widgetLeft;
+        const R = pocket.widgetRight;
+        const T = pocket.fullTop;
+        const B = pocket.widgetBottom;
+        const r = pocket.widgetCorner;
+        const joinR = Math.min(r, Math.max(0, (R - L) / 2));
+        fb.strokeSquircleCorner(ctx, L, T, joinR, 0, true);
+        ctx.lineTo(L, B - r);
+        fb.strokeSquircleCorner(ctx, L, B, r, 2, false);
+        ctx.lineTo(R - r, B);
+        fb.strokeSquircleCorner(ctx, R, B, r, 1, false);
+        ctx.lineTo(R, T + joinR);
+        fb.strokeSquircleCorner(ctx, R, T, joinR, 3, true);
+    }
+
+    // attachLeft: top+left rails glued. Clockwise hole hits the left rail at
+    // the BL join, walks free bottom→right→TR, and returns on the top edge.
+    function strokeLeftPocketDetour(ctx, pocket) {
+        const R = pocket.widgetRight;
+        const T = pocket.fullTop;
+        const B = pocket.widgetBottom;
+        const r = pocket.widgetCorner;
+        const joinR = Math.min(r, Math.max(0, (R - pocket.widgetLeft) / 2));
+        fb.strokeSquircleCorner(ctx, fb.holeX, B, r, 3, true);
+        ctx.lineTo(R - r, B);
+        fb.strokeSquircleCorner(ctx, R, B, r, 1, false);
+        ctx.lineTo(R, T + joinR);
+        fb.strokeSquircleCorner(ctx, R, T, joinR, 3, true);
+    }
+
+    // attachRight: top+right rails glued. Clockwise hole leaves the top edge
+    // at the TL join, walks free left→bottom→BR, and resumes on the right rail.
+    function strokeRightPocketDetour(ctx, pocket) {
+        const L = pocket.widgetLeft;
+        const T = pocket.fullTop;
+        const B = pocket.widgetBottom;
+        const r = pocket.widgetCorner;
+        fb.strokeSquircleCorner(ctx, L, T, r, 0, true);
+        ctx.lineTo(L, B - r);
+        fb.strokeSquircleCorner(ctx, L, B, r, 2, false);
+        ctx.lineTo(fb.holeRight - r, B);
+        fb.strokeSquircleCorner(ctx, fb.holeRight, B, r, 0, true);
+    }
+
+    // OSD: bottom+right rails glued. Clockwise hole leaves the right rail at
+    // the top join, walks free top→left→BL, and resumes on the bottom edge.
+    function strokeBottomRightPocketDetour(ctx, pocket) {
+        const L = pocket.widgetLeft;
+        const B = pocket.widgetBottom;
+        const topY = pocket.widgetTop;
+        const r = pocket.widgetCorner;
+        fb.strokeSquircleCorner(ctx, fb.holeRight, topY, r, 1, true);
+        ctx.lineTo(L + r, topY);
+        fb.strokeSquircleCorner(ctx, L, topY, r, 3, false);
+        ctx.lineTo(L, B - r);
+        fb.strokeSquircleCorner(ctx, L, B, r, 1, true);
+    }
+
+    // One even-odd path: outer rect minus a hole whose boundary already walks
+    // every open pocket silhouette. No second fill — that was the seam along
+    // the old rectangular hole edge through attached popups.
+    function traceFrame(ctx) {
         const ix = fb.holeX;
         const iy = fb.holeY;
         const iw = fb.holeW;
@@ -245,76 +286,85 @@ Item {
         if (iw <= 0 || ih <= 0)
             return ;
 
+        const pockets = fb.activePockets();
+        let leftPocket = null;
+        let rightPocket = null;
+        let bottomRightPocket = null;
+        const topPockets = [];
+        for (let i = 0; i < pockets.length; i++) {
+            const pocket = pockets[i];
+            const kind = fb.pocketKind(pocket);
+            if (kind === "left")
+                leftPocket = pocket;
+            else if (kind === "right")
+                rightPocket = pocket;
+            else if (kind === "bottomRight")
+                bottomRightPocket = pocket;
+            else
+                topPockets.push(pocket);
+        }
+        topPockets.sort(function(a, b) {
+            return a.widgetLeft - b.widgetLeft;
+        });
+        // Clockwise hole. Each pocket replaces the rectangular span it owns.
+        if (leftPocket) {
+            const R = leftPocket.widgetRight;
+            const joinR = Math.min(leftPocket.widgetCorner, Math.max(0, (R - leftPocket.widgetLeft) / 2));
+            // Start on the top edge just past the pocket's TR join.
+            ctx.moveTo(R + joinR, iy);
+            ctx.lineTo(ix + iw - ir, iy);
+            fb.strokeOffsetCorner(ctx, ix + iw, iy, 0, true);
+            if (bottomRightPocket) {
+                ctx.lineTo(ix + iw, bottomRightPocket.widgetTop - bottomRightPocket.widgetCorner);
+                fb.strokeBottomRightPocketDetour(ctx, bottomRightPocket);
+            } else {
+                ctx.lineTo(ix + iw, iy + ih - ir);
+                fb.strokeOffsetCorner(ctx, ix + iw, iy + ih, 1, true);
+            }
+            ctx.lineTo(ix + ir, iy + ih);
+            fb.strokeOffsetCorner(ctx, ix, iy + ih, 2, true);
+            ctx.lineTo(ix, leftPocket.widgetBottom + leftPocket.widgetCorner);
+            fb.strokeLeftPocketDetour(ctx, leftPocket);
+            ctx.closePath();
+            return ;
+        }
         ctx.moveTo(ix + ir, iy);
-        ctx.lineTo(ix + iw - ir, iy);
-        fb.strokeOffsetCorner(ctx, ix + iw, iy, 0, true);
-        ctx.lineTo(ix + iw, iy + ih - ir);
-        fb.strokeOffsetCorner(ctx, ix + iw, iy + ih, 1, true);
+        let topX = ix + ir;
+        for (let t = 0; t < topPockets.length; t++) {
+            const pocket = topPockets[t];
+            const joinR = Math.min(pocket.widgetCorner, Math.max(0, (pocket.widgetRight - pocket.widgetLeft) / 2));
+            const enterX = Math.max(ix + ir, pocket.widgetLeft - joinR);
+            ctx.lineTo(enterX, iy);
+            fb.strokeTopPocketDetour(ctx, pocket);
+            topX = pocket.widgetRight + joinR;
+        }
+        if (rightPocket) {
+            const enterX = Math.max(topX, Math.max(ix + ir, rightPocket.widgetLeft - rightPocket.widgetCorner));
+            ctx.lineTo(enterX, iy);
+            fb.strokeRightPocketDetour(ctx, rightPocket);
+            if (bottomRightPocket) {
+                ctx.lineTo(ix + iw, bottomRightPocket.widgetTop - bottomRightPocket.widgetCorner);
+                fb.strokeBottomRightPocketDetour(ctx, bottomRightPocket);
+            } else {
+                ctx.lineTo(ix + iw, iy + ih - ir);
+                fb.strokeOffsetCorner(ctx, ix + iw, iy + ih, 1, true);
+            }
+        } else {
+            ctx.lineTo(Math.max(topX, ix + iw - ir), iy);
+            fb.strokeOffsetCorner(ctx, ix + iw, iy, 0, true);
+            if (bottomRightPocket) {
+                ctx.lineTo(ix + iw, bottomRightPocket.widgetTop - bottomRightPocket.widgetCorner);
+                fb.strokeBottomRightPocketDetour(ctx, bottomRightPocket);
+            } else {
+                ctx.lineTo(ix + iw, iy + ih - ir);
+                fb.strokeOffsetCorner(ctx, ix + iw, iy + ih, 1, true);
+            }
+        }
         ctx.lineTo(ix + ir, iy + ih);
         fb.strokeOffsetCorner(ctx, ix, iy + ih, 2, true);
         ctx.lineTo(ix, iy + ir);
         fb.strokeOffsetCorner(ctx, ix, iy, 3, true);
         ctx.closePath();
-    }
-
-    function fillPocket(ctx, pocket) {
-        if (!pocket.drawCut)
-            return ;
-
-        const L = pocket.widgetLeft;
-        const R = pocket.widgetRight;
-        const T = pocket.fullTop;
-        const B = pocket.widgetBottom;
-        const r = pocket.widgetCorner;
-        const joinR = Math.min(r, Math.max(0, (R - L) / 2));
-        const attachBottomRight = pocket.attachBottom && pocket.attachRight;
-        ctx.beginPath();
-        if (attachBottomRight) {
-            const widgetTop = pocket.widgetTop;
-            ctx.moveTo(fb.holeRight, fb.holeBottom);
-            ctx.lineTo(fb.holeRight, widgetTop - r);
-            fb.strokeSquircleCorner(ctx, fb.holeRight, widgetTop, r, 1, true);
-            ctx.lineTo(L + r, widgetTop);
-            fb.strokeSquircleCorner(ctx, L, widgetTop, r, 3, false);
-            ctx.lineTo(L, B - r);
-            fb.strokeSquircleCorner(ctx, L, B, r, 1, true);
-            ctx.closePath();
-        } else if (pocket.attachRight) {
-            const topStartX = Math.max(fb.holeX + fb.holeR, L - r);
-            ctx.moveTo(topStartX, T);
-            fb.strokeSquircleCorner(ctx, L, T, r, 0, true);
-            ctx.lineTo(L, B - r);
-            fb.strokeSquircleCorner(ctx, L, B, r, 2, false);
-            ctx.lineTo(fb.holeRight - r, B);
-            fb.strokeSquircleCorner(ctx, fb.holeRight, B, r, 0, true);
-            ctx.lineTo(fb.holeRight, T);
-            ctx.closePath();
-        } else if (pocket.attachLeft) {
-            // Top + left rails attached. Free edges: right + bottom.
-            // Inverted joins flare into the top bar (TR) and left rail (BL);
-            // BR is the only free convex corner. Mirror of attachRight.
-            ctx.moveTo(R + joinR, T);
-            fb.strokeSquircleCorner(ctx, R, T, joinR, 3, false);
-            ctx.lineTo(R, B - r);
-            fb.strokeSquircleCorner(ctx, R, B, r, 1, true);
-            ctx.lineTo(fb.holeX + r, B);
-            fb.strokeSquircleCorner(ctx, fb.holeX, B, r, 3, false);
-            ctx.lineTo(fb.holeX, T);
-            ctx.closePath();
-        } else {
-            const topStartX = Math.max(fb.holeX + fb.holeR, L - joinR);
-            ctx.moveTo(topStartX, T);
-            fb.strokeSquircleCorner(ctx, L, T, joinR, 0, true);
-            ctx.lineTo(L, B - r);
-            fb.strokeSquircleCorner(ctx, L, B, r, 2, false);
-            ctx.lineTo(R - r, B);
-            fb.strokeSquircleCorner(ctx, R, B, r, 1, false);
-            ctx.lineTo(R, T + joinR);
-            fb.strokeSquircleCorner(ctx, R, T, joinR, 3, true);
-            ctx.closePath();
-        }
-        ctx.fillStyle = fb.frameFill;
-        ctx.fill();
     }
 
     function requestFramePaint() {
@@ -325,6 +375,21 @@ Item {
 
     function requestPaints() {
         fb.requestFramePaint();
+    }
+
+    function paintFrame(canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (canvas.width <= 0 || canvas.height <= 0)
+            return ;
+
+        ctx.beginPath();
+        fb.traceFrame(ctx);
+        ctx.fillStyle = fb.frameFill;
+        // Qt Canvas defaults to WindingFill. The HTML string "evenodd" is
+        // ignored, so both CW subpaths filled solid and covered the display.
+        ctx.fillRule = Qt.OddEvenFill;
+        ctx.fill();
     }
 
     // Snapshot the published CardWindow geometry into slot-local coords.
@@ -406,7 +471,6 @@ Item {
                 slot.openFresh();
             else
                 slot.ensureOpen();
-
             fb.closeOtherSlots(owner);
         } else {
             if (pocketA.reveal > 0.001)
@@ -474,18 +538,8 @@ Item {
         target: root
     }
 
-    PocketHost {
-        id: pocketA
-
-        anchors.fill: parent
-    }
-
-    PocketHost {
-        id: pocketB
-
-        anchors.fill: parent
-    }
-
+    // One presentation tree. When a pocket animates the root layer captures
+    // this entire item once and applies the pocket-aware full-display shader.
     Canvas {
         id: frameCanvas
 
@@ -493,27 +547,156 @@ Item {
         antialiasing: true
         renderTarget: Canvas.Image
         renderStrategy: Canvas.Immediate
-        // Apply translucency here so edge coverage stays opaque→0 before blur.
         opacity: fb.frameColor.a
         onAvailableChanged: fb.requestFramePaint()
-        onPaint: {
-            const ctx = getContext("2d");
-            ctx.clearRect(0, 0, width, height);
-            if (width <= 0 || height <= 0)
+        onPaint: fb.paintFrame(frameCanvas)
+    }
+
+    // A is last so its chrome and the shader's `if A else if B` overlap
+    // priority agree during interrupted popup handoffs.
+    PocketHost {
+        id: pocketB
+
+        anchors.fill: parent
+    }
+
+    PocketHost {
+        id: pocketA
+
+        anchors.fill: parent
+    }
+
+    // Independent morph slot. Geometry is written only when this slot is
+    // assigned to a popup — never rebound to live root.frameWidget* props.
+    component PocketHost: Item {
+        id: pocket
+
+        property string owner: ""
+        property string screenName: ""
+        property real fullLeft: 0
+        property real fullRight: 0
+        property real fullTop: 0
+        property real fullBottom: 0
+        property bool attachRight: false
+        property bool attachLeft: false
+        property bool attachBottom: false
+        property real reveal: 0
+        readonly property real visibleReveal: PopupTiming.visibilityAt(reveal)
+        readonly property bool screenMatches: !screenName || !fb.shellScreenName || screenName === fb.shellScreenName
+        readonly property real fullWidth: Math.max(0, fullRight - fullLeft)
+        readonly property real fullHeight: Math.max(0, fullBottom - fullTop)
+        readonly property real morphCenter: attachRight ? fullRight : attachLeft ? fullLeft : (fullLeft + fullRight) / 2
+        readonly property bool edgeAttached: attachRight || attachLeft
+        readonly property real mediaReveal: 0.8 + 0.2 * visibleReveal
+        readonly property real revealWidth: edgeAttached ? fullWidth * mediaReveal : fullWidth * (0.95 + 0.05 * visibleReveal)
+        readonly property real widgetLeft: attachRight ? fullRight - revealWidth : attachLeft ? fullLeft : morphCenter - revealWidth / 2
+        readonly property real widgetRight: attachRight ? fullRight : attachLeft ? fullLeft + revealWidth : morphCenter + revealWidth / 2
+        readonly property real widgetTop: attachBottom ? fullBottom - fullHeight * visibleReveal : fullTop
+        readonly property real widgetBottom: attachBottom ? fullBottom : fullTop + fullHeight * visibleReveal
+        readonly property real widgetCorner: Math.min(fb.joinR, Math.max(0, (widgetRight - widgetLeft) / 2), Math.max(0, (widgetBottom - widgetTop) / 2))
+        readonly property bool drawCut: reveal > 0.001 && screenMatches && widgetRight - widgetLeft > 1 && widgetBottom - widgetTop > 1
+        readonly property real borderAlpha: fb.widgetBorderColor.a * Math.max(0, Math.min(1, reveal))
+        property bool closing: false
+        // Pixel sampling must end at the popup silhouette. Padding this region
+        // for the shadow lets a coarse block straddle the attachment edge and
+        // copy popup pixels upward into the frame rail. The shadow remains a
+        // smooth, independently drawn effect outside this exact clip.
+        readonly property real pixelLeft: Math.max(0, widgetLeft)
+        readonly property real pixelTop: Math.max(0, widgetTop)
+        readonly property real pixelRight: Math.min(fb.width, widgetRight)
+        readonly property real pixelBottom: Math.min(fb.height, widgetBottom)
+        readonly property real pixelWidth: Math.max(0, pixelRight - pixelLeft)
+        readonly property real pixelHeight: Math.max(0, pixelBottom - pixelTop)
+        readonly property real pixelSize: drawCut ? pocketGlitch.resolutionPixels : 1
+        readonly property bool pixelating: drawCut && (pocketGlitch.active || pixelSize > 1.001)
+
+        function setRevealInstant(value) {
+            revealBehavior.enabled = false;
+            pocket.reveal = value;
+            revealBehavior.enabled = true;
+            if (value <= 0.001) {
+                pocket.closing = false;
+                pocketGlitch.stopAt(0);
+            }
+        }
+
+        function openFresh() {
+            pocket.setRevealInstant(0);
+            pocket.closing = false;
+            pocketGlitch.open(true);
+            pocket.reveal = 1;
+        }
+
+        function ensureOpen() {
+            if (pocket.closing) {
+                pocket.closing = false;
+                pocketGlitch.open(false);
+            }
+            pocket.reveal = 1;
+        }
+
+        function closeAnim() {
+            if (pocket.closing)
                 return ;
 
-            ctx.beginPath();
-            fb.traceRing(ctx);
-            ctx.fillStyle = fb.frameFill;
-            // Qt Canvas defaults to WindingFill. The HTML string "evenodd" is
-            // ignored, so both CW subpaths filled solid and covered the display.
-            ctx.fillRule = Qt.OddEvenFill;
-            ctx.fill();
-            // Each pocket is an independent fill — open and close never share a
-            // hole path, so attachment-side switches cannot yank lines across.
-            fb.fillPocket(ctx, pocketA);
-            fb.fillPocket(ctx, pocketB);
+            pocket.closing = true;
+            pocketGlitch.close();
+            pocket.reveal = 0;
         }
+
+        function applyGeometry(geo) {
+            pocket.fullLeft = geo.fullLeft;
+            pocket.fullRight = geo.fullRight;
+            pocket.fullTop = geo.fullTop;
+            pocket.fullBottom = geo.fullBottom;
+            pocket.attachRight = geo.attachRight;
+            pocket.attachLeft = geo.attachLeft;
+            pocket.attachBottom = geo.attachBottom;
+            pocket.screenName = geo.screenName;
+        }
+
+        // Owner stays until overwritten. Reuse keys off reveal <= 0.001 so an
+        // openFresh() instant-zero cannot wipe the owner mid-assign.
+        onRevealChanged: fb.requestPaints()
+        onDrawCutChanged: fb.requestPaints()
+        onWidgetLeftChanged: fb.requestPaints()
+        onWidgetRightChanged: fb.requestPaints()
+        onWidgetTopChanged: fb.requestPaints()
+        onWidgetBottomChanged: fb.requestPaints()
+
+        // The frame surface owns an attached popup's background. Restrict the
+        // overlay to that pocket's live rect; the screen-space origin keeps its
+        // cell lattice fixed while the pocket morphs underneath it.
+        BootGlitch {
+            id: pocketGlitch
+
+            x: pocket.widgetLeft
+            y: pocket.widgetTop
+            width: Math.max(0, pocket.widgetRight - pocket.widgetLeft)
+            height: Math.max(0, pocket.widgetBottom - pocket.widgetTop)
+            visible: pocket.drawCut
+            theme: fb.root.theme
+            corner: pocket.widgetCorner
+            originX: x
+            originY: y
+        }
+
+        WidgetBorder {
+            anchors.fill: parent
+            frame: fb
+            pocket: pocket
+        }
+
+        Behavior on reveal {
+            id: revealBehavior
+
+            NumberAnimation {
+                duration: pocket.closing ? Math.round(fb.root.frameAnimationDuration * 0.6) : fb.root.frameAnimationDuration
+                easing.type: Easing.Linear
+            }
+
+        }
+
     }
 
 }

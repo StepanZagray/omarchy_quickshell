@@ -136,6 +136,7 @@ Item {
                 selected: body.kbdIndex === index
                 width: parent.width
                 height: implicitHeight
+                onHovered: body.kbdIndex = index
                 onClicked: body._fire(modelData)
             }
 
@@ -161,6 +162,7 @@ Item {
                     selected: body.kbdIndex === body._primary.length + index
                     width: (parent.width - parent.columnSpacing) / 2
                     height: implicitHeight
+                    onHovered: body.kbdIndex = body._primary.length + index
                     onClicked: body._fire(modelData)
                 }
 

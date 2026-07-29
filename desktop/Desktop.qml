@@ -28,6 +28,8 @@ Item {
     readonly property string serif: theme.serif
     readonly property string mono: theme.mono
     readonly property int cornerRadius: theme.cornerRadius
+    readonly property int popupCornerRadius: theme.popupCornerRadius
+    readonly property real popupCornerPower: theme.popupCornerPower
     readonly property bool round: theme.round
     readonly property int animationDuration: theme.animationDuration
     // Native system menu visibility. The actions themselves continue to use
@@ -274,12 +276,43 @@ Item {
         return String(n);
     }
 
+    // Cards listen and play close glitch before the notification is actually
+    // dropped from the tracked model (which would destroy the delegate).
+    signal notificationCloseRequested(var notification, string reason)
+
+    function requestCloseNotification(notification, reason) {
+        if (!notification)
+            return;
+        const r = reason || "dismiss";
+        if (r === "dismiss")
+            notificationService.lastDismissed = notificationService.snapshot(notification);
+        root.notificationCloseRequested(notification, r);
+    }
+
+    function finalizeNotificationClose(notification, reason) {
+        if (!notification)
+            return;
+        if (reason === "expire")
+            notification.expire();
+        else
+            notification.dismiss();
+    }
+
     function dismissLastNotification() {
-        notificationService.dismissLast();
+        const list = notificationService.values();
+        if (list.length === 0)
+            return;
+        root.requestCloseNotification(list[list.length - 1], "dismiss");
     }
 
     function dismissAllNotifications() {
-        notificationService.dismissAll();
+        const list = notificationService.values().slice();
+        if (list.length === 0)
+            return;
+        // Preserve prior restore target: most recent card, not the last closed.
+        notificationService.lastDismissed = notificationService.snapshot(list[list.length - 1]);
+        for (let i = list.length - 1; i >= 0; i--)
+            root.notificationCloseRequested(list[i], "dismiss");
     }
 
     function invokeLastNotification() {

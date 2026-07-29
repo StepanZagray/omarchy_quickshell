@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 
 // Clickable bar cell: icon-only or glyph + label + value + optional gauge.
-// Hover wash, bloom, delayed tooltip, left/right click.
+// Hover wash, glitch, delayed tooltip, left/right click.
 Item {
     id: btn
 
@@ -29,6 +29,26 @@ Item {
     Layout.fillHeight: true
     Layout.preferredHeight: root.barHeight
     Layout.preferredWidth: row.implicitWidth + 2 * btn.pad
+    layer.enabled: glitch.active
+    layer.smooth: false
+    layer.effect: HoverGlitchEffect {
+        beat: glitch.beat
+        quality: glitch.quality
+        duration: glitch.dur
+        seed: glitch.seed
+        originX: glitch.ox
+        originY: glitch.oy
+        splitStrength: glitch.split
+        accentMix: glitch.accentMix
+        accent: glitch.accent
+    }
+
+    Glitch {
+        id: glitch
+
+        anchors.fill: parent
+        root: btn.root
+    }
 
     Rectangle {
         anchors.fill: parent
@@ -43,12 +63,6 @@ Item {
 
         }
 
-    }
-
-    Bloom {
-        id: bloom
-
-        root: btn.root
     }
 
     Text {
@@ -191,7 +205,7 @@ Item {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         cursorShape: Qt.PointingHandCursor
         onEntered: {
-            bloom.fire(mouseX, mouseY);
+            glitch.fire(mouseX, mouseY);
             if (btn.tooltip)
                 tipDelay.restart();
 

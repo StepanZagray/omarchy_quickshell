@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import "../fx"
 
 // Click-through layer pinned above everything. Position is computed from
 // the bar-window-local anchor (set by the hovered module) so the tip sits
@@ -27,7 +28,7 @@ PanelWindow {
     }
     visible: reveal > 0.001
 
-    Rectangle {
+    Item {
         id: tip
         readonly property int gap:  6
         readonly property int padH: 8
@@ -42,11 +43,16 @@ PanelWindow {
         }
         y: tooltipOverlay.root.barHeight + gap
 
-        color: tooltipOverlay.root.bg
-        border.color: tooltipOverlay.root.sep
-        border.width: 1
-        radius: tooltipOverlay.root.cornerRadius
         opacity: tooltipOverlay.reveal
+
+        SquircleSurface {
+            anchors.fill: parent
+            color: tooltipOverlay.root.bg
+            borderColor: tooltipOverlay.root.sep
+            borderWidth: 1
+            radius: tooltipOverlay.root.popupCornerRadius
+            power: tooltipOverlay.root.popupCornerPower
+        }
 
         Text {
             id: tipLabel

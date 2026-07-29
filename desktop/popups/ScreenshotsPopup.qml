@@ -46,7 +46,6 @@ CardWindow {
         id: shotCol
         width: parent.width
         spacing: 12
-        opacity: screenshotsPopup.contentReveal
         transform: Translate {
             y: (1 - screenshotsPopup.contentReveal) * -screenshotsPopup.contentTravel
         }

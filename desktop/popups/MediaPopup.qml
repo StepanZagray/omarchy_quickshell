@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "../quick"
 
 CardWindow {
     id: mediaPopup
@@ -13,7 +14,7 @@ CardWindow {
     revealed: root.mediaVisible && mediaPopup.targetScreen
     frameScreenName: mediaPopup.shellScreenName
     cardWidth: 460
-    contentOpenDelayFactor: 1
+    contentOpenDelayFactor: 0
     contentOpenDurationFactor: 1
     contentCloseDurationFactor: 0.6
     layerNamespace: "omarchy-media"
@@ -42,8 +43,6 @@ CardWindow {
     Item {
         width: parent.width
         height: 150
-        opacity: mediaPopup.contentReveal
-
         RowLayout {
             anchors.fill: parent
             spacing: 18
@@ -108,7 +107,7 @@ CardWindow {
                 }
 
                 Row {
-                    spacing: 10
+                    spacing: 8
 
                     Repeater {
                         model: [{
@@ -122,41 +121,22 @@ CardWindow {
                             "action": "next"
                         }]
 
-                        delegate: Rectangle {
+                        delegate: QuickButton {
                             required property var modelData
 
-                            width: modelData.action === "toggle" ? 54 : 42
-                            height: 34
-                            radius: mediaPopup.root.cornerRadius
-                            color: controlMouse.containsMouse ? Qt.rgba(mediaPopup.root.ink.r, mediaPopup.root.ink.g, mediaPopup.root.ink.b, 0.12) : Qt.rgba(mediaPopup.root.ink.r, mediaPopup.root.ink.g, mediaPopup.root.ink.b, 0.05)
-                            border.width: 0
-                            border.color: mediaPopup.root.sep
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.glyph
-                                color: mediaPopup.root.musicTitle.length > 0 ? mediaPopup.root.ink : mediaPopup.root.inkDeep
-                                font.family: mediaPopup.root.mono
-                                font.pixelSize: modelData.action === "toggle" ? 18 : 16
+                            root: mediaPopup.root
+                            glyph: modelData.glyph
+                            label: ""
+                            padH: modelData.action === "toggle" ? 18 : 14
+                            enabled: mediaPopup.root.musicTitle.length > 0
+                            onClicked: {
+                                if (modelData.action === "prev")
+                                    mediaPopup.root.musicPrev();
+                                else if (modelData.action === "next")
+                                    mediaPopup.root.musicNext();
+                                else
+                                    mediaPopup.root.musicToggle();
                             }
-
-                            MouseArea {
-                                id: controlMouse
-
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                enabled: mediaPopup.root.musicTitle.length > 0
-                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                onClicked: {
-                                    if (modelData.action === "prev")
-                                        mediaPopup.root.musicPrev();
-                                    else if (modelData.action === "next")
-                                        mediaPopup.root.musicNext();
-                                    else
-                                        mediaPopup.root.musicToggle();
-                                }
-                            }
-
                         }
 
                     }

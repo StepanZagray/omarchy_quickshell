@@ -4,6 +4,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import "../fx"
 
 // Usage:
 //   CardWindow {
@@ -23,17 +24,21 @@ PanelWindow {
     property real cardHeight: -1
     // Writable so popups can override for debugging, e.g. animationDuration: 800.
     // Defaults to theme.animationDuration when not set by the caller.
-    property int animationDuration: card.theme && card.theme.animationDuration !== undefined
-                                    ? card.theme.animationDuration
-                                    : (card.theme && card.theme.frameAnimationDuration !== undefined
-                                       ? card.theme.frameAnimationDuration : 200)
+    property int animationDuration: card.theme && card.theme.animationDuration !== undefined ? card.theme.animationDuration : (card.theme && card.theme.frameAnimationDuration !== undefined ? card.theme.frameAnimationDuration : 200)
     property int animationEasing: Easing.InOutCubic
     property real contentTravel: 10
-    property real contentOpenDelayFactor: 0
+    property real contentOpenDelayFactor: 0.1
     property real contentOpenDurationFactor: 1
-    property real contentCloseDurationFactor: 1
-    property real revealScaleFrom: 0 // default = current 0→1 behavior
-    property bool revealFades: false // default = opacity stays 1
+    property real closeDurationFactor: 0.6
+    property real contentCloseDurationFactor: closeDurationFactor
+    // Direction in which content resolves. Opening travels along the vector;
+    // closing reverses automatically because contentReveal runs back to zero.
+    property vector2d contentGlitchDirection: Qt.vector2d(0, 1)
+    property real contentGlitchSplit: contentTransition.splitStrength
+    // Geometry stays fixed; free-standing cards are constructed by the shared
+    // binary section mask instead of scale or opacity interpolation.
+    property real revealScaleFrom: 1
+    property bool revealFades: false
     property string layerNamespace: "omarchy-card"
     // Body inset inside the card surface. Override per popup, e.g.
     // bodyPaddingTop: 4 for a tighter top edge on frame-attached widgets.
@@ -68,47 +73,59 @@ PanelWindow {
     // rects on half-pixels and stair-step their corners (very visible on OSD).
     readonly property int joinRadius: frameAttached ? Math.round(theme.frameRounding * 1.5) : 0
     readonly property color surfaceColor: frameAttached ? theme.frameBg : theme.bg
-    readonly property real contentReveal: _contentReveal
+    readonly property real popupCornerRadius: theme.popupCornerRadius !== undefined
+                                                ? theme.popupCornerRadius
+                                                : theme.cornerRadius
+    readonly property real popupCornerPower: theme.popupCornerPower !== undefined
+                                               ? theme.popupCornerPower : 4
+    readonly property real contentReveal: contentTransition.progress
     readonly property bool _anchored: anchored
     // PanelWindow can report 0×0 for a frame before the screen geometry lands.
     // Never paint (or publish frame chrome) until placement inputs are real.
     readonly property bool _layoutReady: width > 0 && height > 0 && surface.width > 0 && surface.height > 0
     default property alias bodyData: bodyContainer.data
     property real _reveal: 0
-    property real _contentReveal: 0
     property bool _closing: false
 
     signal dismiss()
     signal keyPressed(var event)
 
-    function animateReveal(toValue) {
+    function animateReveal(toValue, durationFactor) {
         revealAnim.stop();
         revealAnim.from = card._reveal;
         revealAnim.to = toValue;
+        revealAnim.duration = Math.max(1, card.animationDuration * durationFactor);
         revealAnim.easing.type = card.animationEasing;
         revealAnim.start();
     }
 
     function animateContentReveal(toValue, durationFactor) {
-        contentOpenDelay.stop();
-        contentRevealAnim.stop();
-        contentRevealAnim.from = card._contentReveal;
-        contentRevealAnim.to = toValue;
-        contentRevealAnim.duration = Math.max(0, card.animationDuration * durationFactor);
-        contentRevealAnim.easing.type = card.animationEasing;
-        contentRevealAnim.start();
+        if (toValue > 0.5)
+            contentTransition.open(contentTransition.phase < 0.001, durationFactor);
+        else
+            contentTransition.close(durationFactor);
     }
 
     function animateContentOpen() {
-        contentOpenDelay.stop();
-        contentRevealAnim.stop();
-        const delayMs = Math.max(0, card.animationDuration * card.contentOpenDelayFactor);
-        if (delayMs <= 0) {
-            card.animateContentReveal(1, card.contentOpenDurationFactor);
+        card.animateContentReveal(1, card.contentOpenDurationFactor);
+    }
+
+    // Frame-attached popups have no background of their own — FrameBorder's
+    // pocket is their background, and it hosts the glitch instead. Firing here
+    // too would just double the density over the same cells.
+    function openBootGlitch() {
+        if (card.frameAttached)
             return ;
-        }
-        contentOpenDelay.interval = delayMs;
-        contentOpenDelay.restart();
+
+        // A normal open starts fully coarse. If close is interrupted, reverse
+        // smoothly from the current quality instead of jumping back to zero.
+        bootGlitch.open(card._reveal < 0.001);
+    }
+
+    function closeBootGlitch() {
+        if (!card.frameAttached)
+            bootGlitch.close();
+
     }
 
     function publishFrameSurface() {
@@ -146,15 +163,17 @@ PanelWindow {
     onRevealedChanged: {
         if (!card.revealed) {
             card._closing = true;
-            closeHoldTimer.restart();
-            card.animateReveal(0);
             card.animateContentReveal(0, card.contentCloseDurationFactor);
+            card.closeBootGlitch();
+            card.animateReveal(0, card.closeDurationFactor);
+            closeHoldTimer.restart();
         } else {
             closeHoldTimer.stop();
             card._closing = false;
             if (card._layoutReady) {
-                card.animateReveal(1);
+                card.animateReveal(1, 1);
                 card.animateContentOpen();
+                card.openBootGlitch();
             }
         }
         card.publishFrameSurface();
@@ -163,10 +182,12 @@ PanelWindow {
         if (!card.revealed || !card._layoutReady)
             return ;
 
-        if (card._reveal < 0.001)
-            card.animateReveal(1);
+        if (card._reveal < 0.001) {
+            card.animateReveal(1, 1);
+            card.openBootGlitch();
+        }
 
-        if (card._contentReveal < 0.001)
+        if (contentTransition.phase < 0.001)
             card.animateContentOpen();
 
         card.publishFrameSurface();
@@ -200,13 +221,13 @@ PanelWindow {
         onHeightChanged: card.publishFrameSurface()
         x: {
             let px = 0;
-            if (!card._anchored)
+            if (!card._anchored) {
                 px = (parent.width - width) / 2;
-            else if (card.frameAttached && card.frameAttachRight)
+            } else if (card.frameAttached && card.frameAttachRight) {
                 px = parent.width - width - card.theme.frameThickness - card.frameRightInset;
-            else if (card.frameAttached && card.frameAttachLeft)
+            } else if (card.frameAttached && card.frameAttachLeft) {
                 px = card.theme.frameThickness - card.frameLeftInset;
-            else {
+            } else {
                 const xAnchor = card.anchorBarX > 0 ? card.anchorBarX : parent.width / 2;
                 px = Math.max(card.anchorGap, Math.min(parent.width - width - card.anchorGap, xAnchor - width / 2));
             }
@@ -214,20 +235,35 @@ PanelWindow {
         }
         y: {
             let py = 0;
-            if (!card._anchored)
+            if (!card._anchored) {
                 py = (parent.height - height) / 2;
-            else if (card.frameAttached && card.frameAttachBottom)
+            } else if (card.frameAttached && card.frameAttachBottom) {
                 py = parent.height - height - card.theme.frameThickness - card.frameBottomInset;
-            else {
+            } else {
                 const gap = card.frameAttached ? card.frameTopInset : card.anchorGap;
                 py = card.theme.barHeight + gap;
             }
             return Math.round(py);
         }
-        // Panel chrome fades by baking alpha into the fill/border. Item.opacity
-        // on a layer-shell surface is easy to miss (and would also multiply the
-        // delayed content fade). Content keeps using contentReveal on its own.
+        // Geometry and host opacity remain fixed. The whole free-standing
+        // surface is constructed by the binary section layer below.
         opacity: 1
+        layer.enabled: card.visible && !card.frameAttached
+                       && contentTransition.layerRequired
+        layer.smooth: false
+        layer.effect: ContentGlitch {
+            sectionReveal: true
+            progress: contentTransition.progress
+            quality: contentTransition.quality
+            resolutionPixels: contentTransition.resolutionPixels
+            seed: contentTransition.seed
+            splitStrength: card.contentGlitchSplit
+            splitPixels: contentTransition.splitPixels
+            visualScale: 1
+            corner: card.popupCornerRadius
+            cornerPower: card.popupCornerPower
+            accent: card.theme.accent
+        }
         focus: card.revealed && card._layoutReady
         Keys.onPressed: function(event) {
             if (event.key === Qt.Key_Escape) {
@@ -238,16 +274,34 @@ PanelWindow {
             card.keyPressed(event);
         }
 
-        Rectangle {
+        SquircleSurface {
+            readonly property real fade: card.revealFades ? card._reveal : 1
+
             visible: !card.frameAttached
             anchors.fill: parent
-            readonly property real fade: card.revealFades ? card._reveal : 1
-            color: Qt.rgba(card.surfaceColor.r, card.surfaceColor.g, card.surfaceColor.b,
-                           card.surfaceColor.a * fade)
-            border.color: Qt.rgba(card.theme.sep.r, card.theme.sep.g, card.theme.sep.b,
-                                  card.theme.sep.a * fade)
-            border.width: 1
-            radius: card.theme.cornerRadius
+            color: Qt.rgba(card.surfaceColor.r, card.surfaceColor.g, card.surfaceColor.b, card.surfaceColor.a * fade)
+            borderColor: Qt.rgba(card.theme.sep.r, card.theme.sep.g, card.theme.sep.b, card.theme.sep.a * fade)
+            borderWidth: 1
+            radius: card.popupCornerRadius
+            power: card.popupCornerPower
+        }
+
+        // Declared before the body so the cells sit underneath the content.
+        // Origin is surface coords, which on a fullscreen layer-shell panel are
+        // screen coords — the same space FrameBorder's pocket glitch uses, so a
+        // popup that changes attachment keeps one continuous lattice.
+        BootGlitch {
+            id: bootGlitch
+
+            anchors.fill: parent
+            visible: !card.frameAttached
+            theme: card.theme
+            corner: card.popupCornerRadius
+            cornerPower: card.popupCornerPower
+            visualScale: 1
+            resolutionPixels: contentTransition.resolutionPixels
+            originX: surface.x
+            originY: surface.y
         }
 
         // Swallow clicks so the dismiss MouseArea doesn't fire on body taps.
@@ -270,13 +324,31 @@ PanelWindow {
 
                 width: parent.width
                 height: childrenRect.height
+                // Capture the established body host directly. Avoid a padded
+                // sourceRect or nested sizing wrapper: both make childrenRect
+                // geometry fragile during first layout.
+                layer.enabled: card.visible && card.frameAttached
+                               && contentTransition.layerRequired
+                layer.smooth: false
+                layer.effect: ContentGlitch {
+                    sectionReveal: false
+                    progress: contentTransition.progress
+                    quality: contentTransition.quality
+                    resolutionPixels: contentTransition.resolutionPixels
+                    direction: card.contentGlitchDirection
+                    seed: contentTransition.seed
+                    splitStrength: card.contentGlitchSplit
+                    splitPixels: contentTransition.splitPixels
+                    visualScale: 1
+                    accent: card.theme.accent
+                }
             }
 
         }
 
         transform: Scale {
             origin.x: {
-                if (!card._anchored)
+                if (!card.frameAttached)
                     return surface.width / 2;
 
                 if (card.frameAttached && card.frameAttachRight)
@@ -289,7 +361,7 @@ PanelWindow {
                 return Math.max(0, Math.min(surface.width, xAnchor - surface.x));
             }
             origin.y: {
-                if (!card._anchored)
+                if (!card.frameAttached)
                     return surface.height / 2;
 
                 if (card.frameAttached && card.frameAttachBottom)
@@ -297,33 +369,29 @@ PanelWindow {
 
                 return 0;
             }
-            xScale: card._layoutReady
-                    ? (card.frameAttached ? 1
-                       : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal))
-                    : card.revealScaleFrom
-            yScale: card._layoutReady
-                    ? (card.frameAttached ? 1
-                       : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal))
-                    : card.revealScaleFrom
+            xScale: card._layoutReady ? (card.frameAttached ? 1 : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal)) : card.revealScaleFrom
+            yScale: card._layoutReady ? (card.frameAttached ? 1 : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal)) : card.revealScaleFrom
         }
 
     }
 
     Connections {
-        target: card.theme
-
         function onFrameWidgetVisibleChanged() {
             if (card.revealed && card.frameAttached && !card.theme.frameWidgetVisible)
                 card.publishFrameSurface();
+
         }
 
         function onFrameWidgetOwnerChanged() {
             if (!card.revealed || !card.frameAttached)
-                return;
+                return ;
 
             if (card.theme.frameWidgetOwner !== card.layerNamespace && !card.theme.frameWidgetVisible)
                 card.publishFrameSurface();
+
         }
+
+        target: card.theme
     }
 
     NumberAnimation {
@@ -334,25 +402,19 @@ PanelWindow {
         duration: card.animationDuration
     }
 
-    NumberAnimation {
-        id: contentRevealAnim
+    PopupGlitchTransition {
+        id: contentTransition
 
-        target: card
-        property: "_contentReveal"
         duration: card.animationDuration
-    }
-
-    Timer {
-        id: contentOpenDelay
-
-        repeat: false
-        onTriggered: card.animateContentReveal(1, card.contentOpenDurationFactor)
+        closeDurationFactor: card.contentCloseDurationFactor
+        freeStanding: !card.frameAttached
+        openDelayFactor: card.frameAttached ? 0 : card.contentOpenDelayFactor
     }
 
     Timer {
         id: closeHoldTimer
 
-        interval: card.animationDuration + 40
+        interval: Math.round(card.animationDuration * card.closeDurationFactor) + 40
         repeat: false
         onTriggered: card._closing = false
     }

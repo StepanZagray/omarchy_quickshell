@@ -1,4 +1,5 @@
 import QtQuick
+import "../quick"
 
 CardWindow {
     id: systemPopup
@@ -28,7 +29,6 @@ CardWindow {
     Column {
         width: parent.width
         spacing: 10
-        opacity: systemPopup.contentReveal
         transform: Translate {
             y: (1 - systemPopup.contentReveal) * -systemPopup.contentTravel
         }
@@ -94,49 +94,12 @@ CardWindow {
 
         Rectangle { width: parent.width; height: 1; color: systemPopup.root.sep }
 
-        Item {
+        QuickButton {
+            root: systemPopup.root
             width: parent.width
-            height: 30
-
-            Rectangle {
-                anchors.fill: parent
-                color: actionMouse.containsMouse
-                       ? Qt.rgba(systemPopup.root.ink.r, systemPopup.root.ink.g, systemPopup.root.ink.b, 0.06)
-                       : "transparent"
-                border.width: 1
-                border.color: actionMouse.containsMouse ? systemPopup.root.ink : systemPopup.root.sep
-            }
-
-            Text {
-                anchors.left: parent.left
-                anchors.leftMargin: 9
-                anchors.verticalCenter: parent.verticalCenter
-                text: "OPEN BTOP"
-                color: systemPopup.root.ink
-                font.family: systemPopup.root.mono
-                font.pixelSize: 10
-                font.letterSpacing: 2
-                font.weight: Font.Medium
-            }
-
-            Text {
-                anchors.right: parent.right
-                anchors.rightMargin: 9
-                anchors.verticalCenter: parent.verticalCenter
-                text: "DETAIL PROCESS VIEW"
-                color: systemPopup.root.inkDeep
-                font.family: systemPopup.root.mono
-                font.pixelSize: 10
-                font.letterSpacing: 1.2
-            }
-
-            MouseArea {
-                id: actionMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: systemPopup.openBtop()
-            }
+            glyph: "󰘚"
+            label: "OPEN BTOP"
+            onClicked: systemPopup.openBtop()
         }
 
         PopupFooter {

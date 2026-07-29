@@ -15,10 +15,24 @@ Item {
     Layout.fillHeight: true
     Layout.preferredWidth: tag.implicitWidth + 4
     Layout.preferredHeight: root.barHeight
+    layer.enabled: glitch.active
+    layer.smooth: false
+    layer.effect: HoverGlitchEffect {
+        beat: glitch.beat
+        quality: glitch.quality
+        duration: glitch.dur
+        seed: glitch.seed
+        originX: glitch.ox
+        originY: glitch.oy
+        splitStrength: glitch.split
+        accentMix: glitch.accentMix
+        accent: glitch.accent
+    }
 
-    Bloom {
-        id: bloom
+    Glitch {
+        id: glitch
 
+        anchors.fill: parent
         root: wsCell.root
     }
 
@@ -50,7 +64,7 @@ Item {
         anchors.margins: -2
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onEntered: bloom.fire(mouseX, mouseY)
+        onEntered: glitch.fire(mouseX, mouseY)
         onClicked: wsCell.activated()
     }
 

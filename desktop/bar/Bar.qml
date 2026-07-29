@@ -46,10 +46,24 @@ PanelWindow {
             Component.onCompleted: bar.root.calendarAnchorItem = clockItem
             implicitWidth: clockOneLine.implicitWidth + 14
             implicitHeight: clockOneLine.implicitHeight + 8
+            layer.enabled: clockGlitch.active
+            layer.smooth: false
+            layer.effect: HoverGlitchEffect {
+                beat: clockGlitch.beat
+                quality: clockGlitch.quality
+                duration: clockGlitch.dur
+                seed: clockGlitch.seed
+                originX: clockGlitch.ox
+                originY: clockGlitch.oy
+                splitStrength: clockGlitch.split
+                accentMix: clockGlitch.accentMix
+                accent: clockGlitch.accent
+            }
 
-            Bloom {
-                id: clockBloom
+            Glitch {
+                id: clockGlitch
 
+                anchors.fill: parent
                 root: bar.root
             }
 
@@ -92,7 +106,7 @@ PanelWindow {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onEntered: {
-                    clockBloom.fire(mouseX, mouseY);
+                    clockGlitch.fire(mouseX, mouseY);
                     clockTipDelay.restart();
                 }
                 onExited: {
@@ -232,7 +246,12 @@ PanelWindow {
                 root: bar.root
                 visible: bar.root.layoutCount > 1
                 value: bar.root.layoutLabel
-                valueColor: bar.root.layoutLabel === bar.root.layoutCodes[0].toUpperCase() ? bar.root.ink : bar.root.seal
+                valueColor: {
+                    const first = bar.root.layoutCodes[0];
+                    if (!first)
+                        return bar.root.ink;
+                    return bar.root.layoutLabel === first.toUpperCase() ? bar.root.ink : bar.root.seal;
+                }
                 tooltip: bar.root.layoutTooltip
                 onActivated: bar.root.cycleLayout()
             }

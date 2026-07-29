@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell.Io
+import "../quick"
 
 // Two-mode picker — local aether blueprints, or wallhaven.cc browse
 // with thumbnail-driven palette extraction.
@@ -155,7 +156,6 @@ CardWindow {
     Column {
         width: parent.width
         spacing: 12
-        opacity: aetherPopup.contentReveal
         transform: Translate {
             y: (1 - aetherPopup.contentReveal) * -aetherPopup.contentTravel
         }
@@ -174,36 +174,39 @@ CardWindow {
             }
         }
 
-        // Mode switch chips. Material toggle hangs off the right edge,
+        // Mode switch buttons. Material toggle hangs off the right edge,
         // only meaningful in wallhaven mode so we hide it elsewhere.
         Item {
             width: parent.width
-            height: 22
+            height: 32
             Row {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
-                DisplayChip {
+                QuickButton {
                     root: aetherPopup.root
                     label: "BLUEPRINTS"
+                    padH: 12
                     selected: !aetherPopup.wallhavenMode
-                    onActivated: aetherPopup.mode = "blueprints"
+                    onClicked: aetherPopup.mode = "blueprints"
                 }
-                DisplayChip {
+                QuickButton {
                     root: aetherPopup.root
                     label: "WALLHAVEN"
+                    padH: 12
                     selected: aetherPopup.wallhavenMode
-                    onActivated: aetherPopup.mode = "wallhaven"
+                    onClicked: aetherPopup.mode = "wallhaven"
                 }
             }
-            DisplayChip {
+            QuickButton {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 root: aetherPopup.root
                 label: "MATERIAL"
+                padH: 12
                 visible: aetherPopup.wallhavenMode
                 selected: wallhaven.material
-                onActivated: wallhaven.material = !wallhaven.material
+                onClicked: wallhaven.material = !wallhaven.material
             }
         }
 
@@ -513,24 +516,26 @@ CardWindow {
         // ---------- Blueprint-only actions ----------
         Item {
             width: parent.width
-            height: 26
+            height: 32
             visible: !aetherPopup.wallhavenMode
-            DisplayChip {
+            QuickButton {
                 root: aetherPopup.root
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 label: "OPEN GUI"
-                onActivated: {
+                padH: 12
+                onClicked: {
                     aetherPopup.root.run("aether");
                     aetherPopup.root.aetherVisible = false;
                 }
             }
-            DisplayChip {
+            QuickButton {
                 root: aetherPopup.root
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 label: "RANDOM REGEN"
-                onActivated: {
+                padH: 12
+                onClicked: {
                     aetherPopup.root.run("sh -c 'aether --generate \"$(aether --random-wallpaper)\"'");
                     aetherPopup.root.aetherVisible = false;
                 }

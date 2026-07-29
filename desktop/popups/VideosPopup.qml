@@ -49,7 +49,6 @@ CardWindow {
         id: vidCol
         width: parent.width
         spacing: 12
-        opacity: videosPopup.contentReveal
         transform: Translate {
             y: (1 - videosPopup.contentReveal) * -videosPopup.contentTravel
         }

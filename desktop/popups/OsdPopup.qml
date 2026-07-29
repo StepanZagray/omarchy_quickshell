@@ -55,7 +55,8 @@ CardWindow {
     cardWidth: chipWidth
     cardHeight: chipHeight + bodyPaddingTop + bodyPaddingBottom
     contentTravel: 10
-    contentOpenDelayFactor: 0.7
+    contentGlitchDirection: Qt.vector2d(0, -1)
+    contentOpenDelayFactor: 0
     contentOpenDurationFactor: 1
     contentCloseDurationFactor: 0.5
     layerNamespace: "omarchy-osd"
@@ -82,8 +83,6 @@ CardWindow {
 
             width: parent.width
             height: parent.height
-            opacity: osdPopup.contentReveal
-
             Text {
                 id: statusMeasure
 
