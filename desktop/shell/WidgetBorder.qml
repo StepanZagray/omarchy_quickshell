@@ -28,14 +28,16 @@ Item {
     readonly property real widgetFullTop: pocket.fullTop
     readonly property real radius: Math.max(0, pocket.widgetCorner)
     readonly property real topJoinRadius: Math.min(radius, Math.max(0, (widgetRight - widgetLeft) / 2))
-    readonly property real fadeLength: frame.widgetBorderFadeLength * Math.max(0, Math.min(1, reveal))
+    readonly property real fadeLength: frame.widgetBorderFadeLength
     readonly property bool attachBottomRight: pocket.attachBottom && pocket.attachRight
     readonly property bool attachRight: !attachBottomRight && pocket.attachRight
     readonly property bool attachLeft: pocket.attachLeft
     readonly property real borderAlpha: pocket.borderAlpha
     readonly property color lineColor: Qt.rgba(frame.widgetBorderColor.r, frame.widgetBorderColor.g, frame.widgetBorderColor.b, borderAlpha)
     readonly property real shadowWidth: frame.widgetShadowWidth
-    readonly property real shadowAlpha: frame.widgetShadowMaxAlpha * Math.max(0, Math.min(1, reveal))
+    // Full contact density — open/close visibility is owned by pocketPixelate
+    // so the shadow constructs with the fill and inverted joins.
+    readonly property real shadowAlpha: frame.widgetShadowMaxAlpha
     readonly property bool drawCut: pocket.drawCut
     readonly property var outlinePoints: buildOutline()
     readonly property var fadeSegments: buildFades()

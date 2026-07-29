@@ -31,9 +31,17 @@ PanelWindow {
     property real contentOpenDurationFactor: 1
     property real closeDurationFactor: 0.6
     property real contentCloseDurationFactor: closeDurationFactor
-    // Direction in which content resolves. Opening travels along the vector;
-    // closing reverses automatically because contentReveal runs back to zero.
-    property vector2d contentGlitchDirection: Qt.vector2d(0, 1)
+    // Near-diagonal for corner-attached widgets (~42° off vertical). Pure
+    // vertical for centred top/bottom attachments.
+    readonly property real _cornerGlitchBias: 0.9
+    property vector2d contentGlitchDirection: {
+        const v = card.frameAttachBottom ? -1 : 1;
+        if (card.frameAttachLeft)
+            return Qt.vector2d(card._cornerGlitchBias, v);
+        if (card.frameAttachRight)
+            return Qt.vector2d(-card._cornerGlitchBias, v);
+        return Qt.vector2d(0, v);
+    }
     property real contentGlitchSplit: contentTransition.splitStrength
     // Geometry stays fixed; free-standing cards are constructed by the shared
     // binary section mask instead of scale or opacity interpolation.
@@ -331,7 +339,10 @@ PanelWindow {
                                && contentTransition.layerRequired
                 layer.smooth: false
                 layer.effect: ContentGlitch {
-                    sectionReveal: false
+                    // Same Omni binary construction as free-standing cards,
+                    // swept along the widget's established open direction.
+                    sectionReveal: true
+                    sectionDirectional: true
                     progress: contentTransition.progress
                     quality: contentTransition.quality
                     resolutionPixels: contentTransition.resolutionPixels
@@ -407,7 +418,9 @@ PanelWindow {
 
         duration: card.animationDuration
         closeDurationFactor: card.contentCloseDurationFactor
-        freeStanding: !card.frameAttached
+        // Omni-strength construction for every card; frame widgets skip the
+        // open delay so pocket and content start on the same beat.
+        freeStanding: true
         openDelayFactor: card.frameAttached ? 0 : card.contentOpenDelayFactor
     }
 

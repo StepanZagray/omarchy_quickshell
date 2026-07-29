@@ -1,9 +1,10 @@
 #version 440
 
-// Popup source reveal. Free-standing surfaces construct in binary centre-out
-// sections; frame-attached content keeps the established directional path.
-// Every output colour comes from the source texture, and source alpha remains
-// the coverage ceiling.
+// Popup source reveal. Surfaces construct in binary sections that resolve from
+// coarse blocks to native pixels. Free-standing menus grow centre-out; frame-
+// attached widgets travel along uDirection so open/close keep their established
+// sweep. Every output colour comes from the source texture, and source alpha
+// remains the coverage ceiling.
 
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -15,6 +16,7 @@ layout(std140, binding = 0) uniform buf {
     float uProgress;
     float uQuality;
     float uSectionReveal;
+    float uSectionDirectional;
     float uSectionRandomness;
     vec2 uDirection;
     float uSeed;
@@ -79,7 +81,6 @@ void main() {
     vec2 direction = length(uDirection) > 0.0001
         ? normalize(uDirection)
         : vec2(0.0, 1.0);
-    vec2 perpendicular = vec2(-direction.y, direction.x);
     float frame = floor(progress * max(1.0, uSteps));
 
     // Resolution is supplied directly by the one shared popup ladder. Edge
@@ -97,44 +98,54 @@ void main() {
     float revealCarrier = 0.0;
 
     if (uSectionReveal > 0.5) {
-        // Every block receives one stable activation threshold. Square distance
-        // from the true surface centre keeps the overall construction centred,
-        // while a broad seeded band lets neighbouring rings interleave instead
-        // of appearing as a visibly ordered sweep.
+        // Every block receives one stable activation threshold. Binary alpha:
+        // a section is entirely absent or retains the sampled source pixel's
+        // original alpha. No smoothstep or progress multiplier.
         vec2 sectionId = floor(px / block);
         vec2 sectionCentre = (sectionId + vec2(0.5)) * block;
-        vec2 halfSize = max(size * 0.5, vec2(1.0));
-        vec2 centreOffset = (sectionCentre - halfSize) / halfSize;
-        float squareOrder = clamp(max(abs(centreOffset.x),
-                                      abs(centreOffset.y)),
-                                  0.0, 1.0);
-        // The area enclosed by a square radius grows with radius². Using that
-        // area coordinate makes progress describe the approximate percentage
-        // of popup sections already present: progress 0.60 ≈ 60% drawn.
-        float areaOrder = squareOrder * squareOrder;
         float randomOrder = hash21(sectionId + vec2(uSeed * 17.0,
                                                     uSeed * 41.0));
         const float ringCount = 18.0;
-        float ringIndex = floor(squareOrder * ringCount);
         float randomness = clamp(uSectionRandomness, 0.0, 0.75);
-        float order = clamp(areaOrder
-                            + (randomOrder - 0.5) * randomness,
-                            0.001, 0.999);
+        float order = 0.001;
 
-        // The innermost ring is deterministic so construction always starts
-        // at the visual centre before randomized neighbouring sections join.
-        if (ringIndex < 0.5)
-            order = 0.001;
+        if (uSectionDirectional > 0.5) {
+            // Frame widgets: construct along the established open direction so
+            // the sweep matches the old directional fade, with Omni's binary
+            // section mask and resolution ladder.
+            float coordinate = directionalCoordinate(sectionCentre / size,
+                                                     direction);
+            order = clamp(coordinate
+                          + (randomOrder - 0.5) * randomness,
+                          0.001, 0.999);
+            if (coordinate * ringCount < 1.0)
+                order = 0.001;
+        } else {
+            // Free-standing menus: square distance from the true surface
+            // centre keeps the overall construction centred, while a broad
+            // seeded band lets neighbouring rings interleave.
+            vec2 halfSize = max(size * 0.5, vec2(1.0));
+            vec2 centreOffset = (sectionCentre - halfSize) / halfSize;
+            float squareOrder = clamp(max(abs(centreOffset.x),
+                                          abs(centreOffset.y)),
+                                      0.0, 1.0);
+            // The area enclosed by a square radius grows with radius². Using
+            // that area coordinate makes progress describe the approximate
+            // percentage of popup sections already present.
+            float areaOrder = squareOrder * squareOrder;
+            float ringIndex = floor(squareOrder * ringCount);
+            order = clamp(areaOrder
+                          + (randomOrder - 0.5) * randomness,
+                          0.001, 0.999);
+            if (ringIndex < 0.5)
+                order = 0.001;
+        }
 
-        // Binary alpha: a section is entirely absent or retains the sampled
-        // source pixel's original alpha. No smoothstep or progress multiplier.
         coverage = step(order, progress);
         revealEdge = coverage * (1.0 - step(order + 0.10, progress));
         revealCarrier = coverage;
     } else {
-        // Frame-attached directional fade. Its softness lives behind the
-        // shared visibility frontier: no content pixel may outrun the frame
-        // pocket whose geometry uses the same progress value.
+        // Legacy directional fade kept for any host that opts out of sections.
         float coordinate = directionalCoordinate(uv, direction);
         float fadeWidth = clamp(uFadeWidth, 0.01, 0.45);
         float front = progress;
@@ -159,12 +170,20 @@ void main() {
     // Quantize to whole source pixels and shift occasional strips along the
     // edge. Clamp every lookup to this same texture: no synthetic pixels and
     // no sampling beyond the popup-content layer.
+    //
+    // Strip orientation stays axis-aligned even when the reveal direction is
+    // diagonal (corner frame widgets). Keying strips to a diagonal direction
+    // paints visible diagonal seam lines across the whole surface while
+    // resolution is still resolving.
     vec2 samplePx = (floor(px / block) + vec2(0.5)) * block;
-    float strip = floor(dot(px, direction) / (5.0 / visualScale));
+    vec2 majorAxis = abs(direction.y) >= abs(direction.x)
+        ? vec2(0.0, 1.0) : vec2(1.0, 0.0);
+    vec2 tearAxis = vec2(-majorAxis.y, majorAxis.x);
+    float strip = floor(dot(px, majorAxis) / (5.0 / visualScale));
     float tearGate = step(0.78, hash21(vec2(strip, frame + uSeed * 31.0)));
     float tearCells = round((hash21(vec2(strip * 1.7,
                                         frame + uSeed)) - 0.5) * 2.0);
-    samplePx += perpendicular * tearCells * block * tearGate * glitchAmount;
+    samplePx += tearAxis * tearCells * block * tearGate * glitchAmount;
     vec2 sampleUv = clamp(samplePx / size, vec2(0.5) / size,
                           vec2(1.0) - vec2(0.5) / size);
 
@@ -173,7 +192,7 @@ void main() {
 
     // Split channels by resampling neighbouring source pixels.
     float splitPx = max(0.0, uSplitPixels) / visualScale * glitchAmount;
-    vec2 splitUv = perpendicular * splitPx / size;
+    vec2 splitUv = tearAxis * splitPx / size;
     vec3 positive = straightRgb(texture(source, clamp(sampleUv + splitUv,
         vec2(0.5) / size, vec2(1.0) - vec2(0.5) / size)));
     vec3 negative = straightRgb(texture(source, clamp(sampleUv - splitUv,

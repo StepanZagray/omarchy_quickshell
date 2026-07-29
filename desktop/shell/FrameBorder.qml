@@ -1,14 +1,16 @@
-// Desktop frame as one morphing filled path (visual only).
+// Desktop frame as one filled path (visual only).
 // Attached widget backgrounds are cut into the workspace hole so the frame
 // itself changes form instead of drawing a separate widget shell.
-// Each frame-attached popup owns an independent pocket slot. Geometry is
-// snapshotted into that slot — never live-bound to root.frameWidget* — so two
-// popups can open/close in parallel. The hole boundary walks every open
-// pocket silhouette in a single even-odd fill (no overlay), so the old
-// rectangular hole edge cannot seam through an attached popup.
+// Each frame-attached popup owns an independent pocket slot. Geometry snaps
+// to full size immediately; open/close construct the pocket with the same
+// binary section + resolution ladder as Omni, swept along the widget's
+// established direction. The hole boundary walks every open pocket silhouette
+// in a single even-odd fill (no overlay), so the old rectangular hole edge
+// cannot seam through an attached popup.
 
 import "../fx"
 import "../fx/PopupTiming.js" as PopupTiming
+import "../fx/PopupResolution.js" as PopupResolution
 import QtQuick
 import QtQuick.Shapes
 
@@ -95,6 +97,22 @@ Item {
             : Qt.vector4d(0, 0, 0, 0)
         property real uPixelsA: pocketA.pixelSize
         property real uPixelsB: pocketB.pixelSize
+        property real uProgressA: pocketA.visibleReveal
+        property real uProgressB: pocketB.visibleReveal
+        property real uQualityA: pocketA.constructQuality
+        property real uQualityB: pocketB.constructQuality
+        property real uSeedA: pocketA.constructSeed
+        property real uSeedB: pocketB.constructSeed
+        property vector2d uDirectionA: pocketA.constructDirection
+        property vector2d uDirectionB: pocketB.constructDirection
+        property vector4d uCoreA: pocketA.pixelating
+            ? Qt.vector4d(pocketA.coreLeft, pocketA.coreTop,
+                          pocketA.coreWidth, pocketA.coreHeight)
+            : Qt.vector4d(0, 0, 0, 0)
+        property vector4d uCoreB: pocketB.pixelating
+            ? Qt.vector4d(pocketB.coreLeft, pocketB.coreTop,
+                          pocketB.coreWidth, pocketB.coreHeight)
+            : Qt.vector4d(0, 0, 0, 0)
 
         fragmentShader: "shaders/pocketPixelate.frag.qsb"
     }
@@ -585,30 +603,52 @@ Item {
         readonly property bool screenMatches: !screenName || !fb.shellScreenName || screenName === fb.shellScreenName
         readonly property real fullWidth: Math.max(0, fullRight - fullLeft)
         readonly property real fullHeight: Math.max(0, fullBottom - fullTop)
-        readonly property real morphCenter: attachRight ? fullRight : attachLeft ? fullLeft : (fullLeft + fullRight) / 2
-        readonly property bool edgeAttached: attachRight || attachLeft
-        readonly property real mediaReveal: 0.8 + 0.2 * visibleReveal
-        readonly property real revealWidth: edgeAttached ? fullWidth * mediaReveal : fullWidth * (0.95 + 0.05 * visibleReveal)
-        readonly property real widgetLeft: attachRight ? fullRight - revealWidth : attachLeft ? fullLeft : morphCenter - revealWidth / 2
-        readonly property real widgetRight: attachRight ? fullRight : attachLeft ? fullLeft + revealWidth : morphCenter + revealWidth / 2
-        readonly property real widgetTop: attachBottom ? fullBottom - fullHeight * visibleReveal : fullTop
-        readonly property real widgetBottom: attachBottom ? fullBottom : fullTop + fullHeight * visibleReveal
+        // Full silhouette from the first visible frame — construction is alpha
+        // + resolution, not a geometry morph.
+        readonly property real revealWidth: fullWidth
+        readonly property real widgetLeft: attachRight ? fullRight - revealWidth : attachLeft ? fullLeft : (fullLeft + fullRight - revealWidth) / 2
+        readonly property real widgetRight: attachRight ? fullRight : attachLeft ? fullLeft + revealWidth : widgetLeft + revealWidth
+        readonly property real widgetTop: attachBottom ? fullBottom - fullHeight : fullTop
+        readonly property real widgetBottom: attachBottom ? fullBottom : fullTop + fullHeight
         readonly property real widgetCorner: Math.min(fb.joinR, Math.max(0, (widgetRight - widgetLeft) / 2), Math.max(0, (widgetBottom - widgetTop) / 2))
         readonly property bool drawCut: reveal > 0.001 && screenMatches && widgetRight - widgetLeft > 1 && widgetBottom - widgetTop > 1
-        readonly property real borderAlpha: fb.widgetBorderColor.a * Math.max(0, Math.min(1, reveal))
+        // Drawn at full density — the pocketPixelate pass owns open/close alpha
+        // for fill, shadow, outline, and inverted joins together.
+        readonly property real borderAlpha: drawCut ? fb.widgetBorderColor.a : 0
         property bool closing: false
-        // Pixel sampling must end at the popup silhouette. Padding this region
-        // for the shadow lets a coarse block straddle the attachment edge and
-        // copy popup pixels upward into the frame rail. The shadow remains a
-        // smooth, independently drawn effect outside this exact clip.
-        readonly property real pixelLeft: Math.max(0, widgetLeft)
-        readonly property real pixelTop: Math.max(0, widgetTop)
-        readonly property real pixelRight: Math.min(fb.width, widgetRight)
-        readonly property real pixelBottom: Math.min(fb.height, widgetBottom)
+        // Construction region covers the painted pocket plus the chrome the
+        // silhouette casts: outward shadow into the hole, and the inverted-
+        // join flares that run joinR along the attachment rail. Clamped to the
+        // workspace hole so coarse blocks cannot spill into the outer frame.
+        readonly property real joinPad: widgetCorner
+        readonly property real chromePad: Math.max(fb.widgetShadowWidth, fb.widgetBorderFadeLength, joinPad) + 2
+        readonly property real pixelLeft: Math.max(fb.holeX, widgetLeft - (attachLeft ? 0 : chromePad))
+        readonly property real pixelTop: Math.max(fb.holeY, widgetTop - (attachBottom ? chromePad : 0))
+        readonly property real pixelRight: Math.min(fb.holeRight, widgetRight + (attachRight ? 0 : chromePad))
+        readonly property real pixelBottom: Math.min(fb.holeBottom, widgetBottom + (attachBottom ? 0 : chromePad))
         readonly property real pixelWidth: Math.max(0, pixelRight - pixelLeft)
         readonly property real pixelHeight: Math.max(0, pixelBottom - pixelTop)
-        readonly property real pixelSize: drawCut ? pocketGlitch.resolutionPixels : 1
-        readonly property bool pixelating: drawCut && (pocketGlitch.active || pixelSize > 1.001)
+        // Exact pocket body — section order stays keyed to this so the chrome
+        // halo constructs on the same sweep as the fill.
+        readonly property real coreLeft: widgetLeft
+        readonly property real coreTop: widgetTop
+        readonly property real coreWidth: Math.max(0, widgetRight - widgetLeft)
+        readonly property real coreHeight: Math.max(0, widgetBottom - widgetTop)
+        readonly property real pixelSize: drawCut ? PopupResolution.pixelsAt(reveal) : 1
+        readonly property real constructQuality: PopupResolution.qualityAt(reveal)
+        readonly property bool constructing: drawCut && (reveal < 0.999 || pocketGlitch.active || pixelSize > 1.001)
+        readonly property bool pixelating: constructing
+        readonly property real constructSeed: pocketGlitch.seed
+        // Match CardWindow corner sweep (~42° off vertical).
+        readonly property real cornerGlitchBias: 0.9
+        readonly property vector2d constructDirection: {
+            const v = attachBottom ? -1 : 1;
+            if (attachLeft)
+                return Qt.vector2d(cornerGlitchBias, v);
+            if (attachRight)
+                return Qt.vector2d(-cornerGlitchBias, v);
+            return Qt.vector2d(0, v);
+        }
 
         function setRevealInstant(value) {
             revealBehavior.enabled = false;
@@ -665,8 +705,8 @@ Item {
         onWidgetBottomChanged: fb.requestPaints()
 
         // The frame surface owns an attached popup's background. Restrict the
-        // overlay to that pocket's live rect; the screen-space origin keeps its
-        // cell lattice fixed while the pocket morphs underneath it.
+        // overlay to that pocket's live rect; screen-space origin keeps the
+        // lattice fixed over the full-size silhouette.
         BootGlitch {
             id: pocketGlitch
 
@@ -679,6 +719,7 @@ Item {
             corner: pocket.widgetCorner
             originX: x
             originY: y
+            resolutionPixels: pocket.pixelSize
         }
 
         WidgetBorder {

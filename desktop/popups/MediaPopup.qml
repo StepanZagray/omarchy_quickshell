@@ -147,10 +147,6 @@ CardWindow {
 
         }
 
-        transform: Translate {
-            y: (1 - mediaPopup.contentReveal) * -mediaPopup.contentTravel
-        }
-
     }
 
 }

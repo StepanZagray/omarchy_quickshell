@@ -50,11 +50,6 @@ CardWindow {
         root: powerMenuPopup.root
         shell: powerMenuPopup.root
         onClose: powerMenuPopup.root.powerMenuVisible = false
-
-        transform: Translate {
-            y: (1 - powerMenuPopup.contentReveal) * -powerMenuPopup.contentTravel
-        }
-
     }
 
 }

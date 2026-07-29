@@ -2,7 +2,7 @@ import QtQuick
 import "PopupResolution.js" as PopupResolution
 import "PopupTiming.js" as PopupTiming
 
-// Shared source-glitch timeline for every free-standing popup/widget.
+// Shared source-glitch timeline for every popup/widget.
 //
 // `phase` is linear animation time. Section coverage is intentionally
 // front-loaded: 60% is constructed at phase 40% while resolution is still
@@ -16,9 +16,8 @@ Item {
 
     property int duration: 200
     property real closeDurationFactor: 0.6
-    // Free-standing surfaces use the complete, deliberately conspicuous
-    // content treatment. Frame-attached surfaces keep their established,
-    // subtler values because the desktop frame supplies additional glitch.
+    // Omni-strength content treatment. Frame-attached hosts still skip the
+    // open delay so pocket and glyphs share one beat.
     property bool freeStanding: false
     property real openDelayFactor: freeStanding ? 0.1 : 0
     property real splitStrength: freeStanding ? 0.52 : 0.22

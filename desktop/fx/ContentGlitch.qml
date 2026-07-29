@@ -1,7 +1,8 @@
 import QtQuick
 
-// Source-only popup reveal. Frame-attached content keeps the directional fade;
-// free-standing surfaces use a binary, centre-out section construction.
+// Source-only popup reveal. Free-standing surfaces construct centre-out;
+// frame-attached surfaces use the same binary sections travelling along
+// `direction` so open/close keep their established sweep.
 ShaderEffect {
     id: fx
 
@@ -9,6 +10,9 @@ ShaderEffect {
     property real progress: 1
     property real quality: 1
     property bool sectionReveal: false
+    // When set with sectionReveal, sections activate along `direction`
+    // instead of growing from the surface centre.
+    property bool sectionDirectional: false
     // Width of the randomized activation band around the centre-out order.
     // 0 is a strict geometric wave; 0.5 lets neighbouring rings interleave.
     property real sectionRandomness: 0.5
@@ -36,6 +40,7 @@ ShaderEffect {
     property real uProgress: fx.progress
     property real uQuality: fx.quality
     property real uSectionReveal: fx.sectionReveal ? 1 : 0
+    property real uSectionDirectional: fx.sectionDirectional ? 1 : 0
     property real uSectionRandomness: fx.sectionRandomness
     property vector2d uDirection: fx.direction
     property real uSeed: fx.seed

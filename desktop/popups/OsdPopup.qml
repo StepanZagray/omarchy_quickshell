@@ -50,12 +50,8 @@ CardWindow {
     theme: root
     revealed: targetScreen
     // Same sizing model as MediaPopup: content height + free-edge body padding.
-    // Bottom pad must be >= contentTravel so the from-underneath slide stays
-    // inside the surface (OSD sits only ~frameThickness above the screen edge).
     cardWidth: chipWidth
     cardHeight: chipHeight + bodyPaddingTop + bodyPaddingBottom
-    contentTravel: 10
-    contentGlitchDirection: Qt.vector2d(0, -1)
     contentOpenDelayFactor: 0
     contentOpenDurationFactor: 1
     contentCloseDurationFactor: 0.5
@@ -72,8 +68,6 @@ CardWindow {
     bodyPaddingRight: 8
     bodySpacing: 0
 
-    // Translate on a host without opacity so the slide isn't clipped by the
-    // offscreen buffer Qt allocates for opacity < 1.
     Item {
         width: parent.width
         height: osdPopup.chipHeight
@@ -205,10 +199,6 @@ CardWindow {
                 font.letterSpacing: 1
             }
 
-        }
-
-        transform: Translate {
-            y: (1 - osdPopup.contentReveal) * osdPopup.contentTravel
         }
 
     }
