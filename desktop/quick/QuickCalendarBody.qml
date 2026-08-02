@@ -162,7 +162,6 @@ Item {
                     readonly property bool isWeekend: dayOfWeek >= 5
                     readonly property bool isCurrentMonth: modelData.day !== 0
                     readonly property bool isToday: modelData.today
-                    readonly property bool isHoliday: modelData.holiday !== ""
                     readonly property bool isSelected: isCurrentMonth
                                                        && body.shell
                                                        && body.shell.selectedDay === modelData.day
@@ -170,7 +169,7 @@ Item {
                     readonly property color textColor: {
                         if (isToday) return body.root.seal.hsvValue < 0.5 ? body.root.ink : body.root.paper;
                         if (!isCurrentMonth) return body.root.inkDeep;
-                        return (isWeekend || isHoliday) ? body.root.seal : body.root.ink;
+                        return isWeekend ? body.root.seal : body.root.ink;
                     }
 
                     Rectangle {
@@ -228,15 +227,6 @@ Item {
             visible: body.shell && body.shell.selectedDay > 0
             text: body.shell ? body.shell.selectedDayDetail : ""
             color: body.root.ink
-            font.family: body.root.mono
-            font.pixelSize: 11
-            font.letterSpacing: 2
-        }
-        Text {
-            width: parent.width
-            visible: body.shell && body.shell.selectedDayHoliday.length > 0
-            text: body.shell ? body.shell.selectedDayHoliday.toUpperCase() : ""
-            color: body.root.seal
             font.family: body.root.mono
             font.pixelSize: 11
             font.letterSpacing: 2

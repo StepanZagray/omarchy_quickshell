@@ -22,7 +22,7 @@ CardWindow {
     contentCloseDurationFactor: 0.6
     bodyPaddingTop: 16
     bodyPaddingBottom: 16
-    bodyPaddingLeft: 4
+    bodyPaddingLeft: 3
     bodyPaddingRight: 8
     layerNamespace: "omarchy-power"
     frameAttached: true

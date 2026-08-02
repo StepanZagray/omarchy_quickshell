@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 CardWindow {
     id: screenshotsPopup
@@ -130,51 +131,54 @@ CardWindow {
                     width: (shotCol.width - 18) / 4
                     height: width * 9 / 16
 
-                    Rectangle {
+                    SquircleRect {
                         anchors.fill: parent
+                        root: screenshotsPopup.root
                         color: Qt.rgba(screenshotsPopup.root.ink.r, screenshotsPopup.root.ink.g, screenshotsPopup.root.ink.b, shotCell.filled ? 0.04 : 0.02)
-                        border.color: shotCell.isSelected ? screenshotsPopup.root.seal : screenshotsPopup.root.sep
-                        border.width: 1
+                        borderColor: shotCell.isSelected ? screenshotsPopup.root.seal : screenshotsPopup.root.sep
+                        borderWidth: 1
                         antialiasing: true
+                        clipContents: true
+
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            visible: shotCell.filled
+                            // Source gated on popup visibility so the QQuickPixmapCache
+                            // drops decoded bitmaps when the widget is hidden.
+                            source: (shotCell.filled && screenshotsPopup.root.screenshotsVisible)
+                                    ? "file://" + shotCell.entry.path : ""
+                            sourceSize.width: 256
+                            sourceSize.height: 144
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: true
+                            opacity: shotMouse.containsMouse || shotCell.isSelected ? 1.0 : 0.85
+                            Behavior on opacity { NumberAnimation { duration: screenshotsPopup.animationDuration; easing.type: screenshotsPopup.animationEasing } }
+                        }
                     }
 
-                    Image {
+                    SquircleRect {
                         anchors.fill: parent
                         anchors.margins: 1
-                        visible: shotCell.filled
-                        // Source gated on popup visibility so the QQuickPixmapCache
-                        // drops decoded bitmaps when the widget is hidden.
-                        source: (shotCell.filled && screenshotsPopup.root.screenshotsVisible)
-                                ? "file://" + shotCell.entry.path : ""
-                        sourceSize.width: 256
-                        sourceSize.height: 144
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        cache: true
-                        clip: true
-                        opacity: shotMouse.containsMouse || shotCell.isSelected ? 1.0 : 0.85
-                        Behavior on opacity { NumberAnimation { duration: screenshotsPopup.animationDuration; easing.type: screenshotsPopup.animationEasing } }
-                    }
-
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: 1
+                        root: screenshotsPopup.root
                         color: "transparent"
-                        border.color: screenshotsPopup.root.seal
-                        border.width: shotMouse.containsMouse && !shotCell.isSelected ? 1 : 0
+                        borderColor: screenshotsPopup.root.seal
+                        borderWidth: shotMouse.containsMouse && !shotCell.isSelected ? 1 : 0
                         visible: shotCell.filled
                         antialiasing: true
-                        Behavior on border.width { NumberAnimation { duration: screenshotsPopup.animationDuration; easing.type: screenshotsPopup.animationEasing } }
+                        Behavior on borderWidth { NumberAnimation { duration: screenshotsPopup.animationDuration; easing.type: screenshotsPopup.animationEasing } }
                     }
 
                     // Snap-on / fade-out so the ack reads even from peripheral
                     // vision; copiedReset clears root.copiedPath after 1.4s.
-                    Rectangle {
+                    SquircleRect {
                         anchors.fill: parent
                         anchors.margins: 1
+                        root: screenshotsPopup.root
                         color: Qt.rgba(screenshotsPopup.root.seal.r, screenshotsPopup.root.seal.g, screenshotsPopup.root.seal.b, 0.28)
-                        border.color: screenshotsPopup.root.seal
-                        border.width: 2
+                        borderColor: screenshotsPopup.root.seal
+                        borderWidth: 2
                         visible: opacity > 0.01
                         opacity: shotCell.justCopied ? 1 : 0
                         antialiasing: true

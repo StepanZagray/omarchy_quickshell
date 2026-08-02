@@ -1,20 +1,18 @@
 .pragma library
 
-// Shared visibility curve for every popup:
-//   0–40% time   -> 0–60% visible
-//  40–100% time -> 60–100% visible
+// Shared form/coverage curve for every popup. Ease-in power: slow at the
+// start, accelerating as phase advances. Lighter exponent than resolution so
+// the silhouette fills ahead of sharpening.
 //
 // Evaluating the same curve while raw progress travels from 1 to 0 makes
 // closing the exact temporal reverse of opening.
+
+var FORM_EXPONENT = 2;
 
 function clamp01(value) {
     return Math.max(0, Math.min(1, value));
 }
 
 function visibilityAt(progress) {
-    const p = clamp01(progress);
-    if (p <= 0.4)
-        return 0.6 * p / 0.4;
-
-    return 0.6 + 0.4 * (p - 0.4) / 0.6;
+    return Math.pow(clamp01(progress), FORM_EXPONENT);
 }

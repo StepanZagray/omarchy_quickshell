@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 // Mono-caps action button used throughout the Quick detail panels.
 // Compact, optional left glyph + label, click signal.
@@ -21,14 +22,14 @@ Item {
     implicitHeight: 32
     opacity: enabled ? 1 : 0.4
 
-    Rectangle {
+    SquircleRect {
         anchors.fill: parent
-        radius: btn.root.cornerRadius
+        root: btn.root
         color: btn.lit
                ? Qt.rgba(btn.root.seal.r, btn.root.seal.g, btn.root.seal.b, 0.2)
                : Qt.rgba(btn.root.ink.r, btn.root.ink.g, btn.root.ink.b, 0.03)
-        border.color: btn.lit ? btn.root.seal : btn.root.sep
-        border.width: btn.lit ? 2 : 1
+        borderColor: btn.lit ? btn.root.seal : btn.root.sep
+        borderWidth: btn.lit ? 2 : 1
 
         Behavior on color {
             ColorAnimation {
@@ -37,14 +38,14 @@ Item {
             }
         }
 
-        Behavior on border.color {
+        Behavior on borderColor {
             ColorAnimation {
                 duration: btn.root.animationDuration
                 easing.type: Easing.InOutCubic
             }
         }
 
-        Behavior on border.width {
+        Behavior on borderWidth {
             NumberAnimation {
                 duration: btn.root.animationDuration
                 easing.type: Easing.InOutCubic

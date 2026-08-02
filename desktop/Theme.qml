@@ -20,19 +20,19 @@ Item {
     // omarchy's walker.css because that file is rewritten by a buggy
     // script and would drift out of sync with what we actually rendered.
     readonly property string cornerStatePath: Quickshell.env("HOME") + "/.local/state/quickshell-desktop/corners"
-    property int cornerRadius: 6
-    readonly property bool round: cornerRadius > 0
-    // Outer popup silhouettes match FrameBorder's 16px fourth-power free
-    // corners. Inner controls keep using the tighter cornerRadius above.
-    readonly property int popupCornerRadius: round ? 16 : 0
+    // Single corner spec for frame popups and every squircle control in the
+    // shell. Matches FrameBorder / CardWindow (16px, fourth-power curve).
+    property int popupCornerRadius: 16
+    readonly property bool round: popupCornerRadius > 0
     readonly property real popupCornerPower: 4
+    readonly property int cornerRadius: popupCornerRadius
 
     function setCorners(mode) {
-        const want = (mode === "round" || mode === true || mode === 6) ? 6 : 0;
-        theme.cornerRadius = want;
+        const want = (mode === "sharp" || mode === false || mode === 0) ? 0 : 16;
+        theme.popupCornerRadius = want;
         cornerWriter.command = ["bash", "-lc",
             "mkdir -p " + JSON.stringify(theme.cornerStatePath.replace(/\/[^/]+$/, ""))
-            + " && printf '%s' " + JSON.stringify(want === 6 ? "round" : "sharp")
+            + " && printf '%s' " + JSON.stringify(want > 0 ? "round" : "sharp")
             + " > " + JSON.stringify(theme.cornerStatePath)];
         cornerWriter.running = false;
         cornerWriter.running = true;
@@ -91,7 +91,7 @@ Item {
     // Local persistence: one-line file containing "round" or "sharp".
     // Read at startup so the toggle survives across logins. We read via a
     // Process (not FileView) because FileView's initial load races with
-    // property assignment in some Quickshell builds, leaving cornerRadius
+    // property assignment in some Quickshell builds, leaving popupCornerRadius
     // at its default of 0 even when the file says "round".
     Process { id: cornerWriter; running: false }
     Process {
@@ -100,12 +100,12 @@ Item {
         command: ["cat", theme.cornerStatePath]
         stdout: StdioCollector {
             onStreamFinished: {
-                theme.cornerRadius = this.text.trim() === "round" ? 6 : 0;
+                theme.popupCornerRadius = this.text.trim() === "round" ? 16 : 0;
             }
         }
         onExited: function(code) {
             // Missing file -> match Hypr's window rounding.
-            if (code !== 0) theme.cornerRadius = 6;
+            if (code !== 0) theme.popupCornerRadius = 16;
         }
     }
 

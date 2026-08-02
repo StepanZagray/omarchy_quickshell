@@ -1,3 +1,4 @@
+import "../fx"
 import "../quick"
 import QtQuick
 
@@ -62,14 +63,14 @@ CardWindow {
     theme: root
     revealed: root.calendarVisible && calendarPopup.targetScreen
     frameScreenName: calendarPopup.shellScreenName
-    cardWidth: 356
+    cardWidth: 300
     contentOpenDelayFactor: 0
     contentOpenDurationFactor: 1
     contentCloseDurationFactor: 0.6
     bodyPaddingTop: 8
     bodyPaddingBottom: 16
-    bodyPaddingLeft: 10
-    bodyPaddingRight: 10
+    bodyPaddingLeft: 4
+    bodyPaddingRight: 4
     layerNamespace: "omarchy-calendar"
     frameAttached: true
     onDismiss: calendarPopup.root.calendarVisible = false
@@ -113,25 +114,25 @@ CardWindow {
         width: parent.width
         spacing: 10
 
-        Rectangle {
+        SquircleRect {
             width: parent.width
             height: 48
-            radius: calendarPopup.root.cornerRadius
+            root: calendarPopup.root
             color: Qt.rgba(calendarPopup.root.ink.r, calendarPopup.root.ink.g, calendarPopup.root.ink.b, 0.04)
-            border.width: 1
-            border.color: calendarPopup.root.sep
+            borderWidth: 1
+            borderColor: calendarPopup.root.sep
 
             Text {
                 anchors.left: parent.left
-                anchors.leftMargin: 12
+                anchors.leftMargin: 16
                 anchors.right: monthControls.left
                 anchors.rightMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
                 text: calendarPopup.root.selectedDay > 0 ? calendarPopup.root.selectedDayDetail : "SELECT A DAY"
-                color: calendarPopup.root.selectedDayHoliday.length > 0 ? calendarPopup.root.seal : calendarPopup.root.ink
+                color: calendarPopup.root.ink
                 font.family: calendarPopup.root.mono
                 font.pixelSize: 12
-                font.letterSpacing: 0.25
+                font.letterSpacing: 0.2
                 font.weight: Font.Medium
             }
 
@@ -184,13 +185,13 @@ CardWindow {
 
         }
 
-        Rectangle {
+        SquircleRect {
             width: parent.width
             height: calendarPlate.implicitHeight + 16
-            radius: calendarPopup.root.cornerRadius
+            root: calendarPopup.root
             color: Qt.rgba(calendarPopup.root.ink.r, calendarPopup.root.ink.g, calendarPopup.root.ink.b, 0.025)
-            border.width: 1
-            border.color: calendarPopup.root.sep
+            borderWidth: 1
+            borderColor: calendarPopup.root.sep
 
             Column {
                 id: calendarPlate
@@ -198,8 +199,11 @@ CardWindow {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 8
-                spacing: 4
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                anchors.bottomMargin: 8
+                anchors.topMargin: 12
+                spacing: 8
 
                 Row {
                     width: parent.width
@@ -212,7 +216,7 @@ CardWindow {
                             required property int index
 
                             width: parent.width / 7
-                            height: 22
+                            height: 12
 
                             Text {
                                 anchors.centerIn: parent
@@ -239,7 +243,7 @@ CardWindow {
 
                 Grid {
                     columns: 7
-                    rowSpacing: 2
+                    rowSpacing: 0
                     columnSpacing: 0
                     width: parent.width
 
@@ -255,10 +259,10 @@ CardWindow {
                             readonly property bool isWeekend: dayOfWeek >= 5
                             readonly property bool isCurrentMonth: modelData.day !== 0
                             readonly property bool isToday: modelData.today
-                            readonly property bool isHoliday: modelData.holiday !== ""
                             readonly property bool isSelected: isCurrentMonth && calendarPopup.root.selectedDay === modelData.day
                             readonly property bool isHovered: dayMouse.containsMouse && isCurrentMonth
                             readonly property bool isEmphasized: isSelected && (isHovered || calendarPopup.keyboardNavigation)
+                            readonly property real dayChipSize: dayCell.isEmphasized ? 34 : 32
                             readonly property color textColor: {
                                 if (isToday)
                                     return calendarPopup.root.seal.hsvValue < 0.5 ? calendarPopup.root.ink : calendarPopup.root.paper;
@@ -266,17 +270,17 @@ CardWindow {
                                 if (!isCurrentMonth)
                                     return calendarPopup.root.inkDeep;
 
-                                return (isWeekend || isHoliday) ? calendarPopup.root.seal : calendarPopup.root.ink;
+                                return (isWeekend) ? calendarPopup.root.seal : calendarPopup.root.ink;
                             }
 
                             width: parent.width / 7
                             height: 32
 
-                            Rectangle {
+                            SquircleRect {
                                 anchors.centerIn: parent
-                                width: dayCell.isEmphasized ? 40 : 36
-                                height: dayCell.isEmphasized ? 30 : 28
-                                radius: calendarPopup.root.cornerRadius
+                                width: dayCell.dayChipSize
+                                height: dayCell.dayChipSize
+                                root: calendarPopup.root
                                 color: {
                                     if (dayCell.isToday && dayCell.isEmphasized)
                                         return Qt.lighter(calendarPopup.root.seal, 1.18);
@@ -295,8 +299,8 @@ CardWindow {
 
                                     return "transparent";
                                 }
-                                border.color: dayCell.isSelected && !dayCell.isToday ? calendarPopup.root.seal : "transparent"
-                                border.width: dayCell.isSelected && !dayCell.isToday ? 2 : 0
+                                borderColor: dayCell.isSelected && !dayCell.isToday ? calendarPopup.root.seal : "transparent"
+                                borderWidth: dayCell.isSelected && !dayCell.isToday ? 2 : 0
                                 antialiasing: true
 
                                 Behavior on color {
@@ -335,17 +339,6 @@ CardWindow {
                                 font.weight: dayCell.isToday || dayCell.isSelected ? Font.Medium : Font.Light
                             }
 
-                            Rectangle {
-                                visible: dayCell.isHoliday && !dayCell.isToday
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.bottom: parent.bottom
-                                anchors.bottomMargin: 1
-                                width: 3
-                                height: 3
-                                radius: 2
-                                color: calendarPopup.root.seal
-                            }
-
                             MouseArea {
                                 id: dayMouse
 
@@ -369,11 +362,6 @@ CardWindow {
 
             }
 
-        }
-
-        PopupFooter {
-            root: calendarPopup.root
-            text: "HJKL / ARROWS  ·  PGUP/DN MONTH  ·  HOME TODAY  ·  ESC"
         }
 
     }

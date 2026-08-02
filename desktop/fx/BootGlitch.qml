@@ -44,7 +44,7 @@ Item {
     property int currentDuration: openDuration
 
     // `quality` is raw linear popup progress: 0 = closed, 1 = open. The shared
-    // helper turns it into the held-then-resolving quality curve.
+    // helper turns it into the ease-in quality / pixel curve.
     property real quality: 1
     property real phase: 1
     property real seed: 0
@@ -120,8 +120,8 @@ Item {
         property color uAccent: fx.theme.accent
     }
 
-    // Linear raw progress lets PopupResolution apply the same exact milestone
-    // timing as ContentGlitch. Close traverses the same function backwards.
+    // Linear raw progress lets PopupResolution apply the same ease-in curve
+    // as ContentGlitch. Close traverses the same function backwards.
     NumberAnimation {
         id: qualityOpenAnim
 

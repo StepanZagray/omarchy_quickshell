@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 CardWindow {
     id: videosPopup
@@ -131,49 +132,47 @@ CardWindow {
                     width: (vidCol.width - 18) / 4
                     height: width * 9 / 16
 
-                    Rectangle {
+                    SquircleRect {
                         anchors.fill: parent
+                        root: videosPopup.root
                         color: Qt.rgba(videosPopup.root.ink.r, videosPopup.root.ink.g, videosPopup.root.ink.b, vidCell.filled ? 0.04 : 0.02)
-                        border.color: vidCell.isSelected ? videosPopup.root.seal : videosPopup.root.sep
-                        border.width: 1
+                        borderColor: vidCell.isSelected ? videosPopup.root.seal : videosPopup.root.sep
+                        borderWidth: 1
                         antialiasing: true
+                        clipContents: true
+
+                        Image {
+                            id: vidThumb
+                            anchors.fill: parent
+                            anchors.margins: 1
+                            visible: vidCell.filled && status === Image.Ready
+                            // cache: false because the cached thumb on disk is
+                            // overwritten when the source video changes; the
+                            // QQuickPixmapCache would otherwise keep serving the
+                            // stale decode for the session.
+                            source: (vidCell.filled && videosPopup.root.videosVisible && vidCell.entry.thumb)
+                                    ? "file://" + vidCell.entry.thumb : ""
+                            sourceSize.width: 320
+                            sourceSize.height: 180
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: false
+                            opacity: vidMouse.containsMouse || vidCell.isSelected ? 1.0 : 0.85
+                            Behavior on opacity { NumberAnimation { duration: videosPopup.animationDuration; easing.type: videosPopup.animationEasing } }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: vidCell.filled && vidThumb.status !== Image.Ready
+                            text: String.fromCodePoint(0xf040a)
+                            color: videosPopup.root.inkDeep
+                            font.family: videosPopup.root.mono
+                            font.pixelSize: 28
+                            opacity: 0.55
+                        }
                     }
 
-                    // Non-Ready statuses surface the fallback glyph below —
-                    // covers ffmpeg failures and the race window before a
-                    // fresh thumb lands on disk.
-                    Image {
-                        id: vidThumb
-                        anchors.fill: parent
-                        anchors.margins: 1
-                        visible: vidCell.filled && status === Image.Ready
-                        // cache: false because the cached thumb on disk is
-                        // overwritten when the source video changes; the
-                        // QQuickPixmapCache would otherwise keep serving the
-                        // stale decode for the session.
-                        source: (vidCell.filled && videosPopup.root.videosVisible && vidCell.entry.thumb)
-                                ? "file://" + vidCell.entry.thumb : ""
-                        sourceSize.width: 320
-                        sourceSize.height: 180
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        cache: false
-                        clip: true
-                        opacity: vidMouse.containsMouse || vidCell.isSelected ? 1.0 : 0.85
-                        Behavior on opacity { NumberAnimation { duration: videosPopup.animationDuration; easing.type: videosPopup.animationEasing } }
-                    }
-
-                    Text {
-                        anchors.centerIn: parent
-                        visible: vidCell.filled && vidThumb.status !== Image.Ready
-                        text: String.fromCodePoint(0xf040a)
-                        color: videosPopup.root.inkDeep
-                        font.family: videosPopup.root.mono
-                        font.pixelSize: 28
-                        opacity: 0.55
-                    }
-
-                    Rectangle {
+                    SquircleRect {
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
                         anchors.margins: 4
@@ -181,7 +180,7 @@ CardWindow {
                         height: durLabel.implicitHeight + 4
                         color: Qt.rgba(videosPopup.root.paper.r, videosPopup.root.paper.g, videosPopup.root.paper.b, 0.72)
                         visible: vidCell.filled && durLabel.text.length > 0
-                        radius: videosPopup.root.cornerRadius
+                        root: videosPopup.root
 
                         Text {
                             id: durLabel
@@ -195,23 +194,25 @@ CardWindow {
                         }
                     }
 
-                    Rectangle {
+                    SquircleRect {
                         anchors.fill: parent
                         anchors.margins: 1
+                        root: videosPopup.root
                         color: "transparent"
-                        border.color: videosPopup.root.seal
-                        border.width: vidMouse.containsMouse && !vidCell.isSelected ? 1 : 0
+                        borderColor: videosPopup.root.seal
+                        borderWidth: vidMouse.containsMouse && !vidCell.isSelected ? 1 : 0
                         visible: vidCell.filled
                         antialiasing: true
-                        Behavior on border.width { NumberAnimation { duration: videosPopup.animationDuration; easing.type: videosPopup.animationEasing } }
+                        Behavior on borderWidth { NumberAnimation { duration: videosPopup.animationDuration; easing.type: videosPopup.animationEasing } }
                     }
 
-                    Rectangle {
+                    SquircleRect {
                         anchors.fill: parent
                         anchors.margins: 1
+                        root: videosPopup.root
                         color: Qt.rgba(videosPopup.root.seal.r, videosPopup.root.seal.g, videosPopup.root.seal.b, 0.28)
-                        border.color: videosPopup.root.seal
-                        border.width: 2
+                        borderColor: videosPopup.root.seal
+                        borderWidth: 2
                         visible: opacity > 0.01
                         opacity: vidCell.justCopied ? 1 : 0
                         antialiasing: true

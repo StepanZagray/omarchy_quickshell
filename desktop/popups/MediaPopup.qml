@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "../fx"
 import "../quick"
 
 CardWindow {
@@ -47,15 +48,15 @@ CardWindow {
             anchors.fill: parent
             spacing: 18
 
-            Rectangle {
+            SquircleRect {
                 Layout.preferredWidth: 150
                 Layout.preferredHeight: 150
                 Layout.alignment: Qt.AlignVCenter
-                radius: mediaPopup.root.cornerRadius
+                root: mediaPopup.root
                 color: Qt.rgba(mediaPopup.root.ink.r, mediaPopup.root.ink.g, mediaPopup.root.ink.b, 0.08)
-                border.width: 0
-                border.color: mediaPopup.root.sep
-                clip: true
+                borderWidth: 0
+                borderColor: mediaPopup.root.sep
+                clipContents: true
 
                 Image {
                     anchors.fill: parent

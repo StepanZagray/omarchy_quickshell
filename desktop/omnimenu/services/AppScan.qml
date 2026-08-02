@@ -64,6 +64,9 @@ Item {
             "        exe = rx.sub('', de.get('Exec', '').strip()).strip()\n" +
             "        if not exe:\n" +
             "            continue\n" +
+            "        # Stable T3 Code desktop entries are excluded; nightly stays.\n" +
+            "        if name.lower() == 't3 code' or ((exe == 't3code' or exe.endswith('/t3code')) and 'nightly' not in exe):\n" +
+            "            continue\n" +
             "        icon = de.get('Icon', '').strip()\n" +
             "        gname = de.get('GenericName', '').strip()\n" +
             "        term = '1' if de.get('Terminal', '').lower() == 'true' else ''\n" +

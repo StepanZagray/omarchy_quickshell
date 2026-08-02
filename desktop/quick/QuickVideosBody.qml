@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 // Videos detail — recent thumbs with duration badges. Keyboard:
 // arrows navigate the grid, Enter copies a file:// URI to the
@@ -107,19 +108,19 @@ Item {
             columnSpacing: 8
             Repeater {
                 model: body._items
-                delegate: Rectangle {
+                delegate: SquircleRect {
                     required property var modelData
                     required property int index
                     readonly property bool kbdFocused: body.kbdIndex === (index + 1)
                     width: body.cellW
                     height: body.cellH
-                    radius: body.root.cornerRadius
+                    root: body.root
                     color: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.05)
-                    border.color: kbdFocused || vidMouse.containsMouse ? body.root.seal : body.root.sep
-                    border.width: kbdFocused ? 2 : 1
-                    clip: true
-                    Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                    Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    borderColor: kbdFocused || vidMouse.containsMouse ? body.root.seal : body.root.sep
+                    borderWidth: kbdFocused ? 2 : 1
+                    clipContents: true
+                    Behavior on borderColor { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on borderWidth { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                     Image {
                         anchors.fill: parent
@@ -140,18 +141,18 @@ Item {
                         font.family: body.root.mono
                         font.pixelSize: 22
                     }
-                    Rectangle {
+                    SquircleRect {
                         visible: modelData.duration > 0
                         anchors.bottom: parent.bottom
                         anchors.right: parent.right
                         anchors.margins: 4
-                        radius: 3
+                        root: body.root
                         // theme.bg paired with theme.ink so the badge
                         // tracks dark + light themes without forcing a
                         // fixed black background.
                         color: Qt.rgba(body.root.paper.r, body.root.paper.g, body.root.paper.b, 0.78)
-                        border.color: body.root.sep
-                        border.width: 1
+                        borderColor: body.root.sep
+                        borderWidth: 1
                         width: durText.implicitWidth + 8
                         height: durText.implicitHeight + 4
                         Text {

@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 // Screenshots detail — recent thumbs (4-column grid). Keyboard:
 // arrows move through the grid, Enter copies to clipboard, Shift+Enter
@@ -104,19 +105,19 @@ Item {
             columnSpacing: 8
             Repeater {
                 model: body._items
-                delegate: Rectangle {
+                delegate: SquircleRect {
                     required property var modelData
                     required property int index
                     readonly property bool kbdFocused: body.kbdIndex === (index + 1)
                     width: body.cellW
                     height: body.cellH
-                    radius: body.root.cornerRadius
+                    root: body.root
                     color: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.05)
-                    border.color: kbdFocused || shotMouse.containsMouse ? body.root.seal : body.root.sep
-                    border.width: kbdFocused ? 2 : 1
-                    clip: true
-                    Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                    Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    borderColor: kbdFocused || shotMouse.containsMouse ? body.root.seal : body.root.sep
+                    borderWidth: kbdFocused ? 2 : 1
+                    clipContents: true
+                    Behavior on borderColor { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on borderWidth { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                     Image {
                         anchors.fill: parent
@@ -153,16 +154,16 @@ Item {
                     // `copiedPath` state the full ScreenshotsPopup uses, so
                     // the ack reads consistently wherever the user copies.
                     // copiedReset on the navbar clears the path after ~1.4s.
-                    Rectangle {
+                    SquircleRect {
                         id: copyFlash
                         readonly property bool justCopied:
                             body.shell && body.shell.copiedPath === modelData.path
                         anchors.fill: parent
                         anchors.margins: 1
-                        radius: body.root.cornerRadius
+                        root: body.root
                         color: Qt.rgba(body.root.seal.r, body.root.seal.g, body.root.seal.b, 0.30)
-                        border.color: body.root.seal
-                        border.width: 2
+                        borderColor: body.root.seal
+                        borderWidth: 2
                         visible: opacity > 0.01
                         opacity: justCopied ? 1 : 0
                         antialiasing: true

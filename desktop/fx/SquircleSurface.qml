@@ -11,6 +11,12 @@ Item {
     property real radius: 0
     property real power: 4
 
+    // Keep stroke and AA inside the item bounds so small controls do not
+    // bleed past their layout box (e.g. calendar day cells in a tight grid).
+    readonly property real paintInset: surface.borderWidth > 0
+                                         ? Math.ceil(surface.borderWidth * 0.5) + 0.5
+                                         : 0.5
+
     function signedPower(value, exponent) {
         if (Math.abs(value) < 0.000001)
             return 0;
@@ -20,7 +26,7 @@ Item {
     }
 
     function addCorner(ctx, centerX, centerY, radius, startAngle, endAngle) {
-        const steps = 24;
+        const steps = Math.max(24, Math.min(64, Math.ceil(radius * 2)));
         const exponent = 2 / Math.max(2, surface.power);
         for (let i = 1; i <= steps; i++) {
             const angle = startAngle + (endAngle - startAngle) * i / steps;
@@ -32,11 +38,11 @@ Item {
         }
     }
 
-    function trace(ctx, inset, requestedRadius) {
+    function trace(ctx, inset, requestedRadius, w, h) {
         const left = inset;
         const top = inset;
-        const right = Math.max(left, surface.width - inset);
-        const bottom = Math.max(top, surface.height - inset);
+        const right = Math.max(left, w - inset);
+        const bottom = Math.max(top, h - inset);
         const width = Math.max(0, right - left);
         const height = Math.max(0, bottom - top);
         const radius = Math.max(0, Math.min(requestedRadius,
@@ -76,7 +82,7 @@ Item {
 
         anchors.fill: parent
         antialiasing: true
-        renderTarget: Canvas.Image
+        renderTarget: Canvas.FramebufferObject
         renderStrategy: Canvas.Immediate
         onAvailableChanged: requestPaint()
         onWidthChanged: requestPaint()
@@ -84,17 +90,20 @@ Item {
         onPaint: {
             const ctx = getContext("2d");
             ctx.clearRect(0, 0, width, height);
-            if (width <= 0 || height <= 0)
+            if (surface.width <= 0 || surface.height <= 0)
                 return;
 
-            surface.trace(ctx, 0, surface.radius);
+            const inset = surface.paintInset;
+            const drawRadius = Math.max(0, surface.radius - inset);
+            surface.trace(ctx, inset, drawRadius, surface.width, surface.height);
             ctx.fillStyle = surface.color;
             ctx.fill();
 
             if (surface.borderWidth > 0 && surface.borderColor.a > 0) {
-                const inset = surface.borderWidth / 2;
-                surface.trace(ctx, inset,
-                              Math.max(0, surface.radius - inset));
+                const strokeInset = inset + surface.borderWidth / 2;
+                surface.trace(ctx, strokeInset,
+                              Math.max(0, surface.radius - strokeInset),
+                              surface.width, surface.height);
                 ctx.strokeStyle = surface.borderColor;
                 ctx.lineWidth = surface.borderWidth;
                 ctx.stroke();

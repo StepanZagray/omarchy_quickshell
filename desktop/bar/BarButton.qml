@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "../fx"
 
 // Clickable bar cell: icon-only or glyph + label + value + optional gauge.
 // Hover wash, glitch, delayed tooltip, left/right click.
@@ -50,9 +51,9 @@ Item {
         root: btn.root
     }
 
-    Rectangle {
+    SquircleRect {
         anchors.fill: parent
-        radius: btn.root.cornerRadius
+        root: btn.root
         color: mouse.containsMouse ? Qt.rgba(btn.root.ink.r, btn.root.ink.g, btn.root.ink.b, 0.08) : "transparent"
 
         Behavior on color {

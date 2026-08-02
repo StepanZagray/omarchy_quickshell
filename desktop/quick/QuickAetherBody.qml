@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 import "../popups"
 import "../services"
 
@@ -221,20 +222,20 @@ Item {
 
             Repeater {
                 model: body._bps
-                delegate: Rectangle {
+                delegate: SquircleRect {
                     required property var modelData
                     required property int index
                     readonly property bool kbdFocused: body.kbdIndex === (body._headerCount + index)
                     width: col.width
                     height: 36
-                    radius: body.root.cornerRadius
+                    root: body.root
                     color: kbdFocused ? body.root.rowSel
                                       : rowMouse.containsMouse ? body.root.rowHi : "transparent"
-                    border.color: kbdFocused ? body.root.seal : body.root.sep
-                    border.width: kbdFocused ? 2 : 1
+                    borderColor: kbdFocused ? body.root.seal : body.root.sep
+                    borderWidth: kbdFocused ? 2 : 1
                     Behavior on color        { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                    Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                    Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on borderColor { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on borderWidth { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                     Row {
                         id: swatchRow
@@ -244,12 +245,13 @@ Item {
                         spacing: 2
                         Repeater {
                             model: (modelData.colors || []).slice(0, 8)
-                            delegate: Rectangle {
+                            delegate: SquircleRect {
                                 required property string modelData
-                                width: 10; height: 10; radius: 2
+                                width: 10; height: 10
+                                root: body.root
                                 color: modelData
-                                border.color: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.10)
-                                border.width: 1
+                                borderColor: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.10)
+                                borderWidth: 1
                             }
                         }
                     }
@@ -323,20 +325,20 @@ Item {
                 columnSpacing: 8
                 Repeater {
                     model: body._wallhavenItems
-                    delegate: Rectangle {
+                    delegate: SquircleRect {
                         required property var modelData
                         required property int index
                         readonly property bool kbdFocused: body.kbdIndex === (body._headerCount + 1 + index)
                         readonly property real cellW: (parent.width - 24) / 4
                         width: cellW
                         height: cellW * 0.62
-                        radius: body.root.cornerRadius
+                        root: body.root
                         color: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.05)
-                        border.color: kbdFocused || whMouse.containsMouse ? body.root.seal : body.root.sep
-                        border.width: kbdFocused ? 2 : 1
-                        clip: true
-                        Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                        Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                        borderColor: kbdFocused || whMouse.containsMouse ? body.root.seal : body.root.sep
+                        borderWidth: kbdFocused ? 2 : 1
+                        clipContents: true
+                        Behavior on borderColor { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                        Behavior on borderWidth { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                         Image {
                             anchors.fill: parent
@@ -383,22 +385,22 @@ Item {
 
             Repeater {
                 model: body._themes
-                delegate: Rectangle {
+                delegate: SquircleRect {
                     required property var modelData
                     required property int index
                     readonly property bool kbdFocused: body.kbdIndex === (body._headerCount + index)
                     width: col.width
                     height: 36
-                    radius: body.root.cornerRadius
+                    root: body.root
                     color: modelData.isActive
                            ? body.root.rowSel
                            : kbdFocused ? body.root.rowSel
                                         : themeMouse.containsMouse ? body.root.rowHi : "transparent"
-                    border.color: kbdFocused || modelData.isActive ? body.root.seal : body.root.sep
-                    border.width: kbdFocused ? 2 : 1
+                    borderColor: kbdFocused || modelData.isActive ? body.root.seal : body.root.sep
+                    borderWidth: kbdFocused ? 2 : 1
                     Behavior on color        { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                    Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                    Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on borderColor { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                    Behavior on borderWidth { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                     Row {
                         id: themeSwatchRow
@@ -408,12 +410,13 @@ Item {
                         spacing: 2
                         Repeater {
                             model: (modelData.swatches || []).slice(0, 8)
-                            delegate: Rectangle {
+                            delegate: SquircleRect {
                                 required property string modelData
-                                width: 10; height: 10; radius: 2
+                                width: 10; height: 10
+                                root: body.root
                                 color: modelData
-                                border.color: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.10)
-                                border.width: 1
+                                borderColor: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.10)
+                                borderWidth: 1
                             }
                         }
                     }

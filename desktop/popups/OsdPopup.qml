@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 // Frame-attached volume/brightness/caps OSD. Same CardWindow + FrameBorder
 // morph path as MediaPopup / CalendarPopup / PowerMenuPopup — the desktop frame
@@ -118,16 +119,16 @@ CardWindow {
                         height: 8
                         anchors.verticalCenter: parent.verticalCenter
 
-                        Rectangle {
+                        SquircleRect {
                             anchors.fill: parent
-                            radius: osdPopup.root.cornerRadius
+                            root: osdPopup.root
                             color: Qt.rgba(osdPopup.root.ink.r, osdPopup.root.ink.g, osdPopup.root.ink.b, 0.12)
                         }
 
-                        Rectangle {
+                        SquircleRect {
                             height: parent.height
                             width: parent.width * Math.max(0, Math.min(1, osdPopup.osd.osdValue / 100))
-                            radius: osdPopup.root.cornerRadius
+                            root: osdPopup.root
                             color: osdPopup.root.seal
                         }
 

@@ -218,12 +218,13 @@ Item {
                     height: 42
                     anchors.top: parent.top
 
-                    Rectangle {
+                    SquircleRect {
                         anchors.fill: parent
+                        root: card.root
                         color: Qt.rgba(card.accent.r, card.accent.g, card.accent.b, 0.10)
-                        border.color: card.critical ? card.root.seal : card.root.sep
-                        border.width: 1
-                        radius: card.root.cornerRadius
+                        borderColor: card.critical ? card.root.seal : card.root.sep
+                        borderWidth: 1
+                        clipContents: true
                     }
 
                     Image {
@@ -344,14 +345,14 @@ Item {
                                 width: displayAction ? actionLabel.implicitWidth + 18 : 0
                                 height: displayAction ? 26 : 0
 
-                                Rectangle {
+                                SquircleRect {
                                     anchors.fill: parent
+                                    root: card.root
                                     color: actionMouse.containsMouse
                                            ? Qt.rgba(card.root.ink.r, card.root.ink.g, card.root.ink.b, 0.10)
                                            : Qt.rgba(card.root.ink.r, card.root.ink.g, card.root.ink.b, 0.03)
-                                    border.color: actionMouse.containsMouse ? card.accent : card.root.sep
-                                    border.width: 1
-                                    radius: card.root.cornerRadius
+                                    borderColor: actionMouse.containsMouse ? card.accent : card.root.sep
+                                    borderWidth: 1
                                 }
 
                                 Text {

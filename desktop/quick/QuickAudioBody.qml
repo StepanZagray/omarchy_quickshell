@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "../fx"
 
 // Audio detail — mute toggle + volume slider + output sink picker.
 // Sinks come from `wpctl status`; switching uses `wpctl set-default`.
@@ -130,23 +131,23 @@ Item {
                     spacing: 4
                     Repeater {
                         model: body._sinks
-                        delegate: Rectangle {
+                        delegate: SquircleRect {
                             required property var modelData
                             required property int index
                             readonly property bool kbdFocused: body.kbdIndex === (index + body._headerCount)
                             width: parent.width
                             height: 30
-                            radius: body.root.cornerRadius
+                            root: body.root
                             color: modelData.isDefault || kbdFocused
                                    ? body.root.rowSel
                                    : sinkMouse.containsMouse
                                        ? body.root.rowHi
                                        : "transparent"
-                            border.color: modelData.isDefault || kbdFocused ? body.root.seal : body.root.sep
-                            border.width: kbdFocused ? 2 : 1
+                            borderColor: modelData.isDefault || kbdFocused ? body.root.seal : body.root.sep
+                            borderWidth: kbdFocused ? 2 : 1
                             Behavior on color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                            Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                            Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                            Behavior on borderColor { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                            Behavior on borderWidth { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                             Text {
                                 anchors.left: parent.left

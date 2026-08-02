@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "../../fx"
 import "../../quick"
 
 // Quick-mode container: tile grid on the left, optional detail panel
@@ -57,19 +58,19 @@ Item {
                            / qc.omni.quickGridCols
                     height: quickGrid.tileH
 
-                    Rectangle {
+                    SquircleRect {
                         anchors.fill: parent
-                        radius: qc.omni.cornerRadius
+                        root: qc.omni
                         color: tileSlot.selected
                                ? Qt.rgba(qc.omni.ink.r, qc.omni.ink.g, qc.omni.ink.b, 0.08)
                                : tileMouse.containsMouse
                                     ? Qt.rgba(qc.omni.ink.r, qc.omni.ink.g, qc.omni.ink.b, 0.05)
                                     : Qt.rgba(qc.omni.ink.r, qc.omni.ink.g, qc.omni.ink.b, 0.03)
-                        border.color: tileSlot.selected ? qc.omni.seal : qc.omni.sep
-                        border.width: tileSlot.selected ? 2 : 1
+                        borderColor: tileSlot.selected ? qc.omni.seal : qc.omni.sep
+                        borderWidth: tileSlot.selected ? 2 : 1
                         Behavior on color        { ColorAnimation  { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic } }
-                        Behavior on border.color { ColorAnimation  { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic } }
-                        Behavior on border.width { NumberAnimation { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic } }
+                        Behavior on borderColor { ColorAnimation  { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic } }
+                        Behavior on borderWidth { NumberAnimation { duration: qc.omni.animationDuration; easing.type: Easing.InOutCubic } }
                     }
 
                     Column {

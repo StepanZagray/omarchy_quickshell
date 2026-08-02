@@ -187,7 +187,6 @@ Item {
     readonly property alias calendarMonthName: calendar.calendarMonthName
     readonly property alias calendarYear: calendar.calendarYear
     readonly property alias selectedDayDetail: calendar.selectedDayDetail
-    readonly property alias selectedDayHoliday: calendar.selectedDayHoliday
     readonly property alias weatherLocationPath: weather.weatherLocationPath
     property alias weatherLocation: weather.weatherLocation
     property alias weatherLoaded: weather.weatherLoaded
@@ -579,14 +578,6 @@ Item {
 
     function applyAetherBlueprint(name) {
         aether.applyAetherBlueprint(name);
-    }
-
-    function easterDate(year) {
-        return calendar.easterDate(year);
-    }
-
-    function norwegianHoliday(year, month, day, easter) {
-        return calendar.norwegianHoliday(year, month, day, easter);
     }
 
     function openCalendar(screenName) {

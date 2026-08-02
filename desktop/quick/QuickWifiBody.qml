@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 // Wi-Fi detail — radio toggle + scan + network list. iwd does all the
 // heavy lifting; the panel just reads `wifiNetworks` and asks iwctl to
@@ -114,23 +115,23 @@ Item {
 
         Repeater {
             model: body._visibleNets
-            delegate: Rectangle {
+            delegate: SquircleRect {
                 required property var modelData
                 required property int index
                 readonly property bool kbdFocused: body.kbdIndex === (index + body._headerCount)
                 width: col.width
                 height: 32
-                radius: body.root.cornerRadius
+                root: body.root
                 color: modelData.inUse || kbdFocused
                        ? body.root.rowSel
                        : netMouse.containsMouse
                            ? body.root.rowHi
                            : "transparent"
-                border.color: modelData.inUse || kbdFocused ? body.root.seal : body.root.sep
-                border.width: kbdFocused ? 2 : 1
+                borderColor: modelData.inUse || kbdFocused ? body.root.seal : body.root.sep
+                borderWidth: kbdFocused ? 2 : 1
                 Behavior on color        { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                Behavior on border.color { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
-                Behavior on border.width { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                Behavior on borderColor { ColorAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
+                Behavior on borderWidth { NumberAnimation { duration: body.root.animationDuration; easing.type: Easing.InOutCubic } }
 
                 Text {
                     id: barsIcon

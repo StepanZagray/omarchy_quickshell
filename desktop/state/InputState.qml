@@ -23,7 +23,8 @@ Item {
         if (!root.keyboardName.length || root.layoutCount < 2)
             return;
 
-        shell.run("hyprctl switchxkblayout " + JSON.stringify(root.keyboardName) + " next");
+        // Keep every keyboard node on the same layout (USB dongles expose many).
+        shell.run("hyprctl switchxkblayout all next");
     }
 
     function _prettyLayout(keymap, layoutCodes, index) {
