@@ -63,10 +63,10 @@ CardWindow {
     frameScreenName: shellScreenName
     exclusiveFocus: false
     captureInput: false
-    bodyPaddingTop: 8
+    bodyPaddingTop: root.space2
     bodyPaddingBottom: 0
-    bodyPaddingLeft: 16
-    bodyPaddingRight: 8
+    bodyPaddingLeft: root.popupPadX
+    bodyPaddingRight: root.space2
     bodySpacing: 0
 
     Item {

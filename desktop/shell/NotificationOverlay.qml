@@ -32,11 +32,11 @@ PanelWindow {
         id: stack
 
         anchors.top: parent.top
-        anchors.topMargin: overlay.root.barInset + 12
+        anchors.topMargin: overlay.root.barInset + overlay.root.popupAnchorGap
         anchors.right: parent.right
-        anchors.rightMargin: overlay.root.frameThickness + 12
-        width: parent.width - overlay.root.frameThickness - 24
-        spacing: 8
+        anchors.rightMargin: overlay.root.frameThickness + overlay.root.popupAnchorGap
+        width: parent.width - overlay.root.frameThickness - overlay.root.popupAnchorGap * 2
+        spacing: overlay.root.space2
 
         Repeater {
             model: overlay.root.notificationModel

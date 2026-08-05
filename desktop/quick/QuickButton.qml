@@ -10,6 +10,7 @@ Item {
     required property var root
     property string label: ""
     property string glyph: ""
+    property real labelLetterSpacing: 1.5
     property bool selected: false
     // Bumps the horizontal padding for tighter button rows.
     property int padH: 14
@@ -75,7 +76,7 @@ Item {
             color: btn.lit ? btn.root.seal : btn.root.ink
             font.family: btn.root.mono
             font.pixelSize: 12
-            font.letterSpacing: 1.5
+            font.letterSpacing: btn.labelLetterSpacing
             font.weight: Font.Medium
         }
     }

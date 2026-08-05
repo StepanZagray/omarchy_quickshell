@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 import "../popups"
 
 // Calendar detail — month grid + day detail. Keyboard: arrow keys move
@@ -172,28 +173,28 @@ Item {
                         return isWeekend ? body.root.seal : body.root.ink;
                     }
 
-                    Rectangle {
+                    SquircleRect {
                         anchors.centerIn: parent
-                        width: 26; height: 26; radius: 13
+                        width: 26; height: 26
+                        root: body.root
                         color: body.root.seal
                         visible: dayCell.isToday
-                        antialiasing: true
                     }
-                    Rectangle {
+                    SquircleRect {
                         anchors.centerIn: parent
-                        width: 26; height: 26; radius: 13
+                        width: 26; height: 26
+                        root: body.root
                         color: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.08)
                         visible: dayMouse.containsMouse && !dayCell.isToday && dayCell.isCurrentMonth
-                        antialiasing: true
                     }
-                    Rectangle {
+                    SquircleRect {
                         anchors.centerIn: parent
-                        width: 26; height: 26; radius: 13
+                        width: 26; height: 26
+                        root: body.root
                         color: "transparent"
-                        border.color: body.root.seal
-                        border.width: 1
+                        borderColor: body.root.seal
+                        borderWidth: 1
                         visible: dayCell.isSelected && !dayCell.isToday
-                        antialiasing: true
                     }
                     Text {
                         anchors.centerIn: parent

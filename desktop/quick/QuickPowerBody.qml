@@ -46,6 +46,7 @@ Item {
     }, {
         "glyph": "󰋊",
         "label": "HIBERNATE",
+        "letterSpacing": 0.25,
         "argv": ["systemctl", "hibernate"],
         "available": body.hibernateAvailable
     }, {
@@ -119,7 +120,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        spacing: 8
+        spacing: 4
         width: parent.width
 
         Repeater {
@@ -135,7 +136,7 @@ Item {
                 enabled: modelData.available
                 selected: body.kbdIndex === index
                 width: parent.width
-                height: implicitHeight
+                height: implicitHeight + 4
                 onHovered: body.kbdIndex = index
                 onClicked: body._fire(modelData)
             }
@@ -144,8 +145,8 @@ Item {
 
         Grid {
             columns: 2
-            columnSpacing: 8
-            rowSpacing: 8
+            columnSpacing: 4
+            rowSpacing: 4
             width: parent.width
 
             Repeater {
@@ -158,10 +159,11 @@ Item {
                     root: body.root
                     glyph: modelData.glyph
                     label: modelData.label
+                    labelLetterSpacing: modelData.letterSpacing !== undefined ? modelData.letterSpacing : 1.5
                     enabled: modelData.available
                     selected: body.kbdIndex === body._primary.length + index
                     width: (parent.width - parent.columnSpacing) / 2
-                    height: implicitHeight
+                    height: implicitHeight + 4
                     onHovered: body.kbdIndex = body._primary.length + index
                     onClicked: body._fire(modelData)
                 }

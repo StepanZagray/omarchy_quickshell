@@ -11,6 +11,7 @@
 import "../fx"
 import "../fx/PopupTiming.js" as PopupTiming
 import "../fx/PopupResolution.js" as PopupResolution
+import "../fx/Squircle.js" as Squircle
 import QtQuick
 import QtQuick.Shapes
 
@@ -28,7 +29,6 @@ Item {
     readonly property real pw: width
     readonly property real ph: height
     readonly property int thickness: root.frameThickness
-    readonly property int rounding: root.frameRounding
     // 4px frame rail on every edge except the bar side (barInset there).
     readonly property int frameEdge: thickness
     readonly property int barInset: root.barInset
@@ -58,14 +58,10 @@ Item {
     // outline's rail fade does (widgetBorderFadeLength), so shadow and border
     // dissolve over one zone.
     readonly property real widgetShadowJoinHold: 0
-    // Match hypr looknfeel (do not edit hypr from here): rounding=6, sides
-    // gaps_out - frameThickness = 3. Hole edge span is windowR+gap; the curve
-    // itself is a Euclidean offset of the window squircle so the gap stays
-    // constant (a larger superellipse alone widens the corner gap for n>2).
-    readonly property real windowRounding: 6
-    readonly property real windowGap: 3
-    readonly property real roundingPower: 4
-    readonly property real joinR: Math.round(rounding * 1.75)
+    // Hole and frame-attached pockets share frameCornerRadius.
+    readonly property real roundingPower: root.theme.contentCornerPower
+    readonly property real holeCornerRadius: root.frameCornerRadius
+    readonly property real pocketCornerRadius: root.frameCornerRadius
     readonly property int cornerSteps: 48
     readonly property bool widgetRequested: root.frameWidgetVisible && root.frameWidgetWidth > 0 && root.frameWidgetHeight > 0
     readonly property bool widgetScreenMatches: !root.frameWidgetScreen || !fb.shellScreenName || root.frameWidgetScreen === fb.shellScreenName
@@ -74,7 +70,7 @@ Item {
     readonly property real holeY: cutTop
     readonly property real holeW: Math.max(0, pw - cutLeft - cutRight)
     readonly property real holeH: Math.max(0, ph - cutTop - cutBottom)
-    readonly property real holeR: Math.min(rounding, Math.min(holeW, holeH) / 2)
+    readonly property real holeR: Math.min(fb.holeCornerRadius, Math.min(holeW, holeH) / 2)
     readonly property real holeRight: holeX + holeW
     readonly property real holeBottom: holeY + holeH
     readonly property bool drawWidgetCut: pocketA.drawCut || pocketB.drawCut
@@ -117,68 +113,6 @@ Item {
         fragmentShader: "shaders/pocketPixelate.frag.qsb"
     }
 
-    // Unit quarter in local space: start (0,-1) → end (1,0), center at origin.
-    // Matches Hyprland rounding.glsl: (x^n + y^n)^(1/n) = 1.
-    function squircleOffset(t, power) {
-        const ang = t * Math.PI / 2;
-        const dx = Math.sin(ang);
-        const dy = -Math.cos(ang);
-        const s = 1 / Math.pow(Math.pow(Math.abs(dx), power) + Math.pow(Math.abs(dy), power), 1 / power);
-        return [dx * s, dy * s];
-    }
-
-    function rotateCorner(dx, dy, rot) {
-        if (rot === 1)
-            return [-dy, dx];
-
-        if (rot === 2)
-            return [-dx, -dy];
-
-        if (rot === 3)
-            return [dy, -dx];
-
-        return [dx, dy];
-    }
-
-    // Outward unit normal of an L_n ball at local point (lx, ly).
-    function squircleNormal(lx, ly, power) {
-        const ax = Math.abs(lx);
-        const ay = Math.abs(ly);
-        let nx = ax < 1e-09 ? 0 : Math.pow(ax, power - 1) * (lx < 0 ? -1 : 1);
-        let ny = ay < 1e-09 ? 0 : Math.pow(ay, power - 1) * (ly < 0 ? -1 : 1);
-        const len = Math.hypot(nx, ny) || 1;
-        return [nx / len, ny / len];
-    }
-
-    // Hole corners: Euclidean offset of the window squircle by windowGap.
-    // rot/cw match strokeSquircleCorner. sx,sy = frame sharp corner.
-    function strokeOffsetCorner(ctx, sx, sy, rot, cw) {
-        const Rw = fb.windowRounding;
-        const G = fb.windowGap;
-        const Rf = Rw + G;
-        if (Rf <= 0.001) {
-            ctx.lineTo(sx, sy);
-            return ;
-        }
-        const power = fb.roundingPower;
-        const steps = fb.cornerSteps;
-        const inwardX = (rot === 0 || rot === 1) ? -1 : 1;
-        const inwardY = (rot === 0 || rot === 3) ? 1 : -1;
-        // Window corner center (concentric with the ideal parallel frame corner).
-        const winCx = sx + inwardX * (G + Rw);
-        const winCy = sy + inwardY * (G + Rw);
-        for (let i = 1; i <= steps; i++) {
-            const t = cw ? (i / steps) : (1 - i / steps);
-            const o = fb.squircleOffset(t, power);
-            const lx = o[0] * Rw;
-            const ly = o[1] * Rw;
-            const local = fb.rotateCorner(lx, ly, rot);
-            const nLocal = fb.squircleNormal(lx, ly, power);
-            const n = fb.rotateCorner(nLocal[0], nLocal[1], rot);
-            ctx.lineTo(winCx + local[0] + G * n[0], winCy + local[1] + G * n[1]);
-        }
-    }
-
     // rot: 0=TR, 1=BR, 2=BL, 3=TL — clockwise around the hole.
     // cw=false walks the same quadrant counter-clockwise (free widget corners).
     function strokeSquircleCorner(ctx, sx, sy, r, rot, cw) {
@@ -186,18 +120,7 @@ Item {
             ctx.lineTo(sx, sy);
             return ;
         }
-        const power = fb.roundingPower;
-        const steps = fb.cornerSteps;
-        for (let i = 1; i <= steps; i++) {
-            const t = cw ? (i / steps) : (1 - i / steps);
-            const o = fb.squircleOffset(t, power);
-            let lx = o[0] * r;
-            let ly = o[1] * r;
-            const local = fb.rotateCorner(lx, ly, rot);
-            const cx = sx + (rot === 0 || rot === 1 ? -r : r);
-            const cy = sy + (rot === 0 || rot === 3 ? r : -r);
-            ctx.lineTo(cx + local[0], cy + local[1]);
-        }
+        Squircle.traceCorner(ctx, sx, sy, r, rot, cw, fb.roundingPower, fb.cornerSteps);
     }
 
     function activePockets() {
@@ -331,16 +254,16 @@ Item {
             // Start on the top edge just past the pocket's TR join.
             ctx.moveTo(R + joinR, iy);
             ctx.lineTo(ix + iw - ir, iy);
-            fb.strokeOffsetCorner(ctx, ix + iw, iy, 0, true);
+            fb.strokeSquircleCorner(ctx, ix + iw, iy, ir, 0, true);
             if (bottomRightPocket) {
                 ctx.lineTo(ix + iw, bottomRightPocket.widgetTop - bottomRightPocket.widgetCorner);
                 fb.strokeBottomRightPocketDetour(ctx, bottomRightPocket);
             } else {
                 ctx.lineTo(ix + iw, iy + ih - ir);
-                fb.strokeOffsetCorner(ctx, ix + iw, iy + ih, 1, true);
+                fb.strokeSquircleCorner(ctx, ix + iw, iy + ih, ir, 1, true);
             }
             ctx.lineTo(ix + ir, iy + ih);
-            fb.strokeOffsetCorner(ctx, ix, iy + ih, 2, true);
+            fb.strokeSquircleCorner(ctx, ix, iy + ih, ir, 2, true);
             ctx.lineTo(ix, leftPocket.widgetBottom + leftPocket.widgetCorner);
             fb.strokeLeftPocketDetour(ctx, leftPocket);
             ctx.closePath();
@@ -365,23 +288,23 @@ Item {
                 fb.strokeBottomRightPocketDetour(ctx, bottomRightPocket);
             } else {
                 ctx.lineTo(ix + iw, iy + ih - ir);
-                fb.strokeOffsetCorner(ctx, ix + iw, iy + ih, 1, true);
+                fb.strokeSquircleCorner(ctx, ix + iw, iy + ih, ir, 1, true);
             }
         } else {
             ctx.lineTo(Math.max(topX, ix + iw - ir), iy);
-            fb.strokeOffsetCorner(ctx, ix + iw, iy, 0, true);
+            fb.strokeSquircleCorner(ctx, ix + iw, iy, ir, 0, true);
             if (bottomRightPocket) {
                 ctx.lineTo(ix + iw, bottomRightPocket.widgetTop - bottomRightPocket.widgetCorner);
                 fb.strokeBottomRightPocketDetour(ctx, bottomRightPocket);
             } else {
                 ctx.lineTo(ix + iw, iy + ih - ir);
-                fb.strokeOffsetCorner(ctx, ix + iw, iy + ih, 1, true);
+                fb.strokeSquircleCorner(ctx, ix + iw, iy + ih, ir, 1, true);
             }
         }
         ctx.lineTo(ix + ir, iy + ih);
-        fb.strokeOffsetCorner(ctx, ix, iy + ih, 2, true);
+        fb.strokeSquircleCorner(ctx, ix, iy + ih, ir, 2, true);
         ctx.lineTo(ix, iy + ir);
-        fb.strokeOffsetCorner(ctx, ix, iy, 3, true);
+        fb.strokeSquircleCorner(ctx, ix, iy, ir, 3, true);
         ctx.closePath();
     }
 
@@ -610,7 +533,7 @@ Item {
         readonly property real widgetRight: attachRight ? fullRight : attachLeft ? fullLeft + revealWidth : widgetLeft + revealWidth
         readonly property real widgetTop: attachBottom ? fullBottom - fullHeight : fullTop
         readonly property real widgetBottom: attachBottom ? fullBottom : fullTop + fullHeight
-        readonly property real widgetCorner: Math.min(fb.joinR, Math.max(0, (widgetRight - widgetLeft) / 2), Math.max(0, (widgetBottom - widgetTop) / 2))
+        readonly property real widgetCorner: Math.min(fb.pocketCornerRadius, Math.max(0, (widgetRight - widgetLeft) / 2), Math.max(0, (widgetBottom - widgetTop) / 2))
         readonly property bool drawCut: reveal > 0.001 && screenMatches && widgetRight - widgetLeft > 1 && widgetBottom - widgetTop > 1
         // Drawn at full density — the pocketPixelate pass owns open/close alpha
         // for fill, shadow, outline, and inverted joins together.
@@ -618,7 +541,7 @@ Item {
         property bool closing: false
         // Construction region covers the painted pocket plus the chrome the
         // silhouette casts: outward shadow into the hole, and the inverted-
-        // join flares that run joinR along the attachment rail. Clamped to the
+        // join flares that run along the attachment rail. Clamped to the
         // workspace hole so coarse blocks cannot spill into the outer frame.
         readonly property real joinPad: widgetCorner
         readonly property real chromePad: Math.max(fb.widgetShadowWidth, fb.widgetBorderFadeLength, joinPad) + 2
@@ -717,6 +640,7 @@ Item {
             visible: pocket.drawCut
             theme: fb.root.theme
             corner: pocket.widgetCorner
+            cornerPower: fb.root.contentCornerPower
             originX: x
             originY: y
             resolutionPixels: pocket.pixelSize

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import QtQuick.Window
+import "../fx/Squircle.js" as Squircle
 
 // Shared outline for every frame-attached popup. Calendar, media, power, and
 // OSD all use the same sampled n=4 superellipse, vector stroke, and rail fades;
@@ -81,8 +82,8 @@ Item {
         const steps = border.frame.cornerSteps;
         for (let i = 1; i <= steps; i++) {
             const t = clockwise ? i / steps : 1 - i / steps;
-            const offset = border.frame.squircleOffset(t, power);
-            const local = border.frame.rotateCorner(offset[0] * r, offset[1] * r, rot);
+            const o = Squircle.squircleOffset(t, power);
+            const local = Squircle.rotateCorner(o[0] * r, o[1] * r, rot);
             const cx = sx + (rot === 0 || rot === 1 ? -r : r);
             const cy = sy + (rot === 0 || rot === 3 ? r : -r);
             border.appendLine(points, cx + local[0], cy + local[1]);
@@ -218,7 +219,7 @@ Item {
         property vector4d uPocket: Qt.vector4d(border.widgetLeft, pocketTop, border.widgetRight, border.widgetBottom)
         property vector4d uRadii: border.convexRadii
         property vector4d uHole: Qt.vector4d(border.frame.holeX, border.frame.holeY, border.frame.holeRight, border.frame.holeBottom)
-        property real uHoleRadius: border.frame.holeR
+        property real uHoleRadius: border.frame.holeCornerRadius
         property real uJoinRadius: border.topJoinRadius
         property real uDepth: border.shadowWidth
         property real uMaxAlpha: border.shadowAlpha

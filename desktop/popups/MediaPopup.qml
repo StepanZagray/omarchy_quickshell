@@ -1,7 +1,7 @@
-import QtQuick
-import QtQuick.Layouts
 import "../fx"
 import "../quick"
+import QtQuick
+import QtQuick.Layouts
 
 CardWindow {
     id: mediaPopup
@@ -14,17 +14,22 @@ CardWindow {
     theme: root
     revealed: root.mediaVisible && mediaPopup.targetScreen
     frameScreenName: mediaPopup.shellScreenName
-    cardWidth: 460
+    cardWidth: 448
     contentOpenDelayFactor: 0
     contentOpenDurationFactor: 1
     contentCloseDurationFactor: 0.6
     layerNamespace: "omarchy-media"
     frameAttached: true
     frameAttachRight: true
+    bodyPaddingTop: 8
     bodyPaddingBottom: 16
-    bodyPaddingLeft: 8
-    bodyPaddingRight: 0
+    bodyPaddingLeft: 0
+    bodyPaddingRight: -4
     onDismiss: mediaPopup.root.mediaVisible = false
+    onRevealedChanged: {
+        if (revealed)
+            artFrame.reloadCoverArt();
+    }
     onKeyPressed: function(event) {
         if (event.key === Qt.Key_Q) {
             mediaPopup.root.mediaVisible = false;
@@ -41,16 +46,33 @@ CardWindow {
         }
     }
 
+    Connections {
+        target: mediaPopup.root
+        function onMusicArtUrlChanged() {
+            artFrame.reloadCoverArt();
+        }
+    }
+
     Item {
         width: parent.width
-        height: 150
+        height: 144
+
         RowLayout {
             anchors.fill: parent
-            spacing: 18
+            spacing: 16
 
             SquircleRect {
-                Layout.preferredWidth: 150
-                Layout.preferredHeight: 150
+                id: artFrame
+
+                function reloadCoverArt() {
+                    const url = mediaPopup.root.musicArtUrl;
+                    coverArt.source = "";
+                    if (url.length > 0)
+                        coverArt.source = url;
+                }
+
+                Layout.preferredWidth: 144
+                Layout.preferredHeight: 144
                 Layout.alignment: Qt.AlignVCenter
                 root: mediaPopup.root
                 color: Qt.rgba(mediaPopup.root.ink.r, mediaPopup.root.ink.g, mediaPopup.root.ink.b, 0.08)
@@ -59,16 +81,24 @@ CardWindow {
                 clipContents: true
 
                 Image {
+                    id: coverArt
+
                     anchors.fill: parent
                     source: mediaPopup.root.musicArtUrl
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                    cache: false
                     visible: status === Image.Ready
+                    onStatusChanged: {
+                        if (status === Image.Ready || status === Image.Error)
+                            artFrame.refreshClipLayer();
+                    }
                 }
 
                 Text {
                     anchors.centerIn: parent
                     visible: mediaPopup.root.musicArtUrl.length === 0
+                        || coverArt.status !== Image.Ready
                     text: mediaPopup.root.icoMusic
                     color: mediaPopup.root.inkDeep
                     font.family: mediaPopup.root.mono
@@ -128,7 +158,8 @@ CardWindow {
                             root: mediaPopup.root
                             glyph: modelData.glyph
                             label: ""
-                            padH: modelData.action === "toggle" ? 18 : 14
+                            implicitHeight: 36
+                            implicitWidth: modelData.action === "toggle" ? implicitHeight + 12 : implicitHeight + 4
                             enabled: mediaPopup.root.musicTitle.length > 0
                             onClicked: {
                                 if (modelData.action === "prev")

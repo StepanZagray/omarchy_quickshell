@@ -108,44 +108,54 @@ Item {
             anchors.fill: parent
             opacity: 1
             scale: 1
-            layer.enabled: paletteGlass.visible && contentTransition.layerRequired
-            layer.smooth: false
-            layer.effect: ContentGlitch {
-                sectionReveal: true
-                progress: contentTransition.progress
-                quality: contentTransition.quality
-                resolutionPixels: contentTransition.resolutionPixels
-                seed: contentTransition.seed
-                splitStrength: contentTransition.splitStrength
-                splitPixels: contentTransition.splitPixels
-                visualScale: 1
-                corner: view.omni.popupCornerRadius
-                cornerPower: view.omni.popupCornerPower
-                accent: view.omni.seal
-            }
 
-            SquircleSurface {
+            SquircleClipHost {
                 anchors.fill: parent
-                color: view.omni.bg
-                radius: view.omni.popupCornerRadius
-                power: view.omni.popupCornerPower
-            }
+                root: view.omni
+                shell: true
 
-            BootGlitch {
-                id: bootGlitch
-                anchors.fill: parent
-                theme: view.omni.theme
-                corner: view.omni.popupCornerRadius
-                cornerPower: view.omni.popupCornerPower
-                visualScale: 1
-                resolutionPixels: contentTransition.resolutionPixels
-                originX: paletteGlass.screen ? (paletteGlass.screen.width - paletteGlass.width) / 2 : 0
-                originY: paletteGlass.screen
-                         ? view.centeredCardY(paletteGlass.screen.height,
-                                              paletteGlass.height)
-                         : 0
-                openDuration: view.omni.animationDuration
-                closeDurationFactor: view.closeDurationFactor
+                Item {
+                    anchors.fill: parent
+                    layer.enabled: paletteGlass.visible && contentTransition.layerRequired
+                    layer.smooth: false
+                    layer.effect: ContentGlitch {
+                        sectionReveal: true
+                        progress: contentTransition.progress
+                        quality: contentTransition.quality
+                        resolutionPixels: contentTransition.resolutionPixels
+                        seed: contentTransition.seed
+                        splitStrength: contentTransition.splitStrength
+                        splitPixels: contentTransition.splitPixels
+                        visualScale: 1
+                        corner: view.omni.frameCornerRadius
+                        cornerPower: view.omni.contentCornerPower
+                        accent: view.omni.seal
+                    }
+
+                    SquircleSurface {
+                        anchors.fill: parent
+                        color: view.omni.bg
+                        radius: view.omni.frameCornerRadius
+                        power: view.omni.contentCornerPower
+                    }
+
+                    BootGlitch {
+                        id: bootGlitch
+                        anchors.fill: parent
+                        theme: view.omni.theme
+                        corner: view.omni.frameCornerRadius
+                        cornerPower: view.omni.contentCornerPower
+                        visualScale: 1
+                        resolutionPixels: contentTransition.resolutionPixels
+                        originX: paletteGlass.screen ? (paletteGlass.screen.width - paletteGlass.width) / 2 : 0
+                        originY: paletteGlass.screen
+                                 ? view.centeredCardY(paletteGlass.screen.height,
+                                                      paletteGlass.height)
+                                 : 0
+                        openDuration: view.omni.animationDuration
+                        closeDurationFactor: view.closeDurationFactor
+                    }
+                }
             }
         }
     }
@@ -198,127 +208,137 @@ Item {
             height: Math.min(cardCol.implicitHeight + 34, parent.height * 0.72)
             transformOrigin: Item.Center
             scale: 1
-            layer.enabled: panel.visible && contentTransition.layerRequired
-            layer.smooth: false
-            layer.effect: ContentGlitch {
-                sectionReveal: true
-                progress: contentTransition.progress
-                quality: contentTransition.quality
-                resolutionPixels: contentTransition.resolutionPixels
-                seed: contentTransition.seed
-                splitStrength: contentTransition.splitStrength
-                splitPixels: contentTransition.splitPixels
-                visualScale: 1
-                corner: view.omni.popupCornerRadius
-                cornerPower: view.omni.popupCornerPower
-                accent: view.omni.seal
-            }
 
-            SquircleSurface {
+            SquircleClipHost {
                 anchors.fill: parent
-                color: "transparent"
-                borderColor: view.omni.sep
-                borderWidth: 1
-                radius: view.omni.popupCornerRadius
-                power: view.omni.popupCornerPower
-            }
+                root: view.omni
+                shell: true
 
-            // Swallow clicks so the underlying dismiss MouseArea doesn't fire.
-            MouseArea { anchors.fill: parent }
+                Item {
+                    anchors.fill: parent
+                    layer.enabled: panel.visible && contentTransition.layerRequired
+                    layer.smooth: false
+                    layer.effect: ContentGlitch {
+                        sectionReveal: true
+                        progress: contentTransition.progress
+                        quality: contentTransition.quality
+                        resolutionPixels: contentTransition.resolutionPixels
+                        seed: contentTransition.seed
+                        splitStrength: contentTransition.splitStrength
+                        splitPixels: contentTransition.splitPixels
+                        visualScale: 1
+                        corner: view.omni.frameCornerRadius
+                        cornerPower: view.omni.contentCornerPower
+                        accent: view.omni.seal
+                    }
+
+                    SquircleSurface {
+                        anchors.fill: parent
+                        color: "transparent"
+                        borderColor: view.omni.sep
+                        borderWidth: 1
+                        radius: view.omni.frameCornerRadius
+                        power: view.omni.contentCornerPower
+                    }
+
+                    // Swallow clicks so the underlying dismiss MouseArea doesn't fire.
+                    MouseArea { anchors.fill: parent }
+
+                    Column {
+                        id: cardCol
+                        anchors.fill: parent
+                        anchors.margins: view.omni.shellInset
+                        spacing: view.omni.popupSectionGap
+
+                        Components.HeaderBar {
+                            id: headerBar
+                            omni: view.omni
+                            processes: view.processes
+                            themes: view.themes
+                            bookmarks: view.bookmarks
+                        }
+
+                        Rectangle { width: parent.width; height: 1; color: view.omni.sep }
+
+                        Components.QuickContainer {
+                            id: quickContainer
+                            omni: view.omni
+                            panel: panel
+                        }
+
+                        Components.SearchInput { omni: view.omni }
+
+                        Rectangle {
+                            visible: !view.omni.quickMode
+                            width: parent.width
+                            height: 1
+                            color: view.omni.sep
+                        }
+
+                        // Fixed row height in the delegate keeps positionViewAtIndex
+                        // honest under fast keyboard navigation; the wrapping Item's
+                        // clip prevents the bottom row bleeding into the footer
+                        // hairline mid-scroll.
+                        Item {
+                            id: listArea
+                            visible: !view.omni.quickMode
+                            width: parent.width
+                            height: visible
+                                ? Math.max(60, card.height - 34 - headerBar.height - 34 - 12 * 4)
+                                : 0
+                            clip: true
+
+                            // In file mode the list shrinks to ~44% of the card so
+                            // a 520px-ish preview pane fits alongside it. The 1px
+                            // hairline + 1px inverse hairline divider sits between
+                            // them. animated alongside card.width for a single
+                            // smooth widen-and-split motion.
+                            readonly property real listFraction: view.omni.previewActive ? 0.44 : 1.0
+
+                            Components.ResultList {
+                                id: resultListInstance
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.left: parent.left
+                                // Follows card.width's Behavior animation — adding a
+                                // second Behavior here would animate to a moving
+                                // target and produce staggered motion.
+                                width: parent.width * listArea.listFraction
+                                omni: view.omni
+                                bookmarks: view.bookmarks
+                                processes: view.processes
+                                themes: view.themes
+                                ollamaChat: view.ollamaChat
+                            }
+
+                            Rectangle {
+                                visible: view.omni.previewActive
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.left: resultListInstance.right
+                                width: 1
+                                color: view.omni.sep
+                            }
+
+                            Components.PreviewPane {
+                                id: previewPaneInstance
+                                visible: view.omni.previewActive
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                anchors.left: resultListInstance.right
+                                anchors.leftMargin: 13
+                                anchors.right: parent.right
+                                omni: view.omni
+                                ollamaChat: view.ollamaChat
+                            }
+                        }
+
+                    }
+                }
+            }
 
             focus: view.omni.visible_
             Keys.onPressed: keyRouter.handle(event)
-
-            Column {
-                id: cardCol
-                anchors.fill: parent
-                anchors.margins: 17
-                spacing: 12
-
-                Components.HeaderBar {
-                    id: headerBar
-                    omni: view.omni
-                    processes: view.processes
-                    themes: view.themes
-                    bookmarks: view.bookmarks
-                }
-
-                Rectangle { width: parent.width; height: 1; color: view.omni.sep }
-
-                Components.QuickContainer {
-                    id: quickContainer
-                    omni: view.omni
-                    panel: panel
-                }
-
-                Components.SearchInput { omni: view.omni }
-
-                Rectangle {
-                    visible: !view.omni.quickMode
-                    width: parent.width
-                    height: 1
-                    color: view.omni.sep
-                }
-
-                // Fixed row height in the delegate keeps positionViewAtIndex
-                // honest under fast keyboard navigation; the wrapping Item's
-                // clip prevents the bottom row bleeding into the footer
-                // hairline mid-scroll.
-                Item {
-                    id: listArea
-                    visible: !view.omni.quickMode
-                    width: parent.width
-                    height: visible
-                        ? Math.max(60, card.height - 34 - headerBar.height - 34 - 12 * 4)
-                        : 0
-                    clip: true
-
-                    // In file mode the list shrinks to ~44% of the card so
-                    // a 520px-ish preview pane fits alongside it. The 1px
-                    // hairline + 1px inverse hairline divider sits between
-                    // them. animated alongside card.width for a single
-                    // smooth widen-and-split motion.
-                    readonly property real listFraction: view.omni.previewActive ? 0.44 : 1.0
-
-                    Components.ResultList {
-                        id: resultListInstance
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        // Follows card.width's Behavior animation — adding a
-                        // second Behavior here would animate to a moving
-                        // target and produce staggered motion.
-                        width: parent.width * listArea.listFraction
-                        omni: view.omni
-                        bookmarks: view.bookmarks
-                        processes: view.processes
-                        themes: view.themes
-                        ollamaChat: view.ollamaChat
-                    }
-
-                    Rectangle {
-                        visible: view.omni.previewActive
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.left: resultListInstance.right
-                        width: 1
-                        color: view.omni.sep
-                    }
-
-                    Components.PreviewPane {
-                        id: previewPaneInstance
-                        visible: view.omni.previewActive
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        anchors.left: resultListInstance.right
-                        anchors.leftMargin: 13
-                        anchors.right: parent.right
-                        omni: view.omni
-                        ollamaChat: view.ollamaChat
-                    }
-                }
-
-            }
         }
     }
 

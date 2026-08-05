@@ -49,12 +49,12 @@ PanelWindow {
     property bool revealFades: false
     property string layerNamespace: "omarchy-card"
     // Body inset inside the card surface. Override per popup, e.g.
-    // bodyPaddingTop: 4 for a tighter top edge on frame-attached widgets.
-    property int bodyPaddingTop: 8
-    property int bodyPaddingBottom: 8
-    property int bodyPaddingLeft: 16
-    property int bodyPaddingRight: 16
-    property int bodySpacing: 12
+    // bodyPaddingTop: theme.space1 for a tighter top edge on frame widgets.
+    property int bodyPaddingTop: card.theme.popupPadY
+    property int bodyPaddingBottom: card.theme.popupPadY
+    property int bodyPaddingLeft: card.theme.popupPadX
+    property int bodyPaddingRight: card.theme.popupPadX
+    property int bodySpacing: card.theme.popupSectionGap
     readonly property int bodyPaddingVertical: bodyPaddingTop + bodyPaddingBottom
     property bool frameAttached: false
     property bool frameAttachRight: false
@@ -71,7 +71,7 @@ PanelWindow {
     // rooted in the icon the user clicked.
     property bool anchored: true
     property real anchorBarX: 0
-    property real anchorGap: 8
+    property real anchorGap: card.theme.popupAnchorGap
     readonly property real frameInset: 0
     readonly property real frameTopInset: frameAttached && !frameAttachBottom ? -1 : 0
     readonly property real frameRightInset: frameAttached && frameAttachRight ? 2 : 0
@@ -79,13 +79,11 @@ PanelWindow {
     readonly property real frameBottomInset: frameAttached && frameAttachBottom ? 2 : 0
     // Integer so body margins stay pixel-aligned. Fractional insets put radius:N
     // rects on half-pixels and stair-step their corners (very visible on OSD).
-    readonly property int joinRadius: frameAttached ? Math.round(theme.frameRounding * 1.5) : 0
+    readonly property int joinRadius: frameAttached ? card.frameCornerRadius : 0
     readonly property color surfaceColor: frameAttached ? theme.frameBg : theme.bg
-    readonly property real popupCornerRadius: theme.popupCornerRadius !== undefined
-                                                ? theme.popupCornerRadius
-                                                : theme.cornerRadius
-    readonly property real popupCornerPower: theme.popupCornerPower !== undefined
-                                               ? theme.popupCornerPower : 4
+    readonly property real frameCornerRadius: theme.frameCornerRadius
+    readonly property real contentCornerRadius: theme.contentCornerRadius
+    readonly property real contentCornerPower: theme.contentCornerPower
     readonly property real contentReveal: contentTransition.progress
     readonly property bool _anchored: anchored
     // PanelWindow can report 0×0 for a frame before the screen geometry lands.
@@ -256,22 +254,6 @@ PanelWindow {
         // Geometry and host opacity remain fixed. The whole free-standing
         // surface is constructed by the binary section layer below.
         opacity: 1
-        layer.enabled: card.visible && !card.frameAttached
-                       && contentTransition.layerRequired
-        layer.smooth: false
-        layer.effect: ContentGlitch {
-            sectionReveal: true
-            progress: contentTransition.progress
-            quality: contentTransition.quality
-            resolutionPixels: contentTransition.resolutionPixels
-            seed: contentTransition.seed
-            splitStrength: card.contentGlitchSplit
-            splitPixels: contentTransition.splitPixels
-            visualScale: 1
-            corner: card.popupCornerRadius
-            cornerPower: card.popupCornerPower
-            accent: card.theme.accent
-        }
         focus: card.revealed && card._layoutReady
         Keys.onPressed: function(event) {
             if (event.key === Qt.Key_Escape) {
@@ -282,106 +264,135 @@ PanelWindow {
             card.keyPressed(event);
         }
 
-        SquircleSurface {
-            readonly property real fade: card.revealFades ? card._reveal : 1
-
-            visible: !card.frameAttached
+        SquircleClipHost {
             anchors.fill: parent
-            color: Qt.rgba(card.surfaceColor.r, card.surfaceColor.g, card.surfaceColor.b, card.surfaceColor.a * fade)
-            borderColor: Qt.rgba(card.theme.sep.r, card.theme.sep.g, card.theme.sep.b, card.theme.sep.a * fade)
-            borderWidth: 1
-            radius: card.popupCornerRadius
-            power: card.popupCornerPower
-        }
-
-        // Declared before the body so the cells sit underneath the content.
-        // Origin is surface coords, which on a fullscreen layer-shell panel are
-        // screen coords — the same space FrameBorder's pocket glitch uses, so a
-        // popup that changes attachment keeps one continuous lattice.
-        BootGlitch {
-            id: bootGlitch
-
-            anchors.fill: parent
-            visible: !card.frameAttached
-            theme: card.theme
-            corner: card.popupCornerRadius
-            cornerPower: card.popupCornerPower
-            visualScale: 1
-            resolutionPixels: contentTransition.resolutionPixels
-            originX: surface.x
-            originY: surface.y
-        }
-
-        // Swallow clicks so the dismiss MouseArea doesn't fire on body taps.
-        MouseArea {
-            anchors.fill: parent
-        }
-
-        Column {
-            id: bodyCol
-
-            anchors.fill: parent
-            anchors.leftMargin: card.bodyPaddingLeft + card.joinRadius
-            anchors.rightMargin: card.bodyPaddingRight + card.joinRadius
-            anchors.topMargin: card.bodyPaddingTop
-            anchors.bottomMargin: card.bodyPaddingBottom
-            spacing: card.bodySpacing
+            root: card.theme
+            shell: true
+            radius: card.frameAttached ? 0 : -1
 
             Item {
-                id: bodyContainer
-
-                width: parent.width
-                height: childrenRect.height
-                // Capture the established body host directly. Avoid a padded
-                // sourceRect or nested sizing wrapper: both make childrenRect
-                // geometry fragile during first layout.
-                layer.enabled: card.visible && card.frameAttached
+                anchors.fill: parent
+                layer.enabled: card.visible && !card.frameAttached
                                && contentTransition.layerRequired
                 layer.smooth: false
                 layer.effect: ContentGlitch {
-                    // Same Omni binary construction as free-standing cards,
-                    // swept along the widget's established open direction.
                     sectionReveal: true
-                    sectionDirectional: true
                     progress: contentTransition.progress
                     quality: contentTransition.quality
                     resolutionPixels: contentTransition.resolutionPixels
-                    direction: card.contentGlitchDirection
                     seed: contentTransition.seed
                     splitStrength: card.contentGlitchSplit
                     splitPixels: contentTransition.splitPixels
                     visualScale: 1
+                    corner: card.frameCornerRadius
+                    cornerPower: card.contentCornerPower
                     accent: card.theme.accent
                 }
+
+                SquircleSurface {
+                    readonly property real fade: card.revealFades ? card._reveal : 1
+
+                    visible: !card.frameAttached
+                    anchors.fill: parent
+                    color: Qt.rgba(card.surfaceColor.r, card.surfaceColor.g, card.surfaceColor.b, card.surfaceColor.a * fade)
+                    borderColor: Qt.rgba(card.theme.sep.r, card.theme.sep.g, card.theme.sep.b, card.theme.sep.a * fade)
+                    borderWidth: 1
+                    radius: card.frameCornerRadius
+                    power: card.contentCornerPower
+                }
+
+                // Declared before the body so the cells sit underneath the content.
+                // Origin is surface coords, which on a fullscreen layer-shell panel are
+                // screen coords — the same space FrameBorder's pocket glitch uses, so a
+                // popup that changes attachment keeps one continuous lattice.
+                BootGlitch {
+                    id: bootGlitch
+
+                    anchors.fill: parent
+                    visible: !card.frameAttached
+                    theme: card.theme
+                    corner: card.frameCornerRadius
+                    cornerPower: card.contentCornerPower
+                    visualScale: 1
+                    resolutionPixels: contentTransition.resolutionPixels
+                    originX: surface.x
+                    originY: surface.y
+                }
+
+                // Swallow clicks so the dismiss MouseArea doesn't fire on body taps.
+                MouseArea {
+                    anchors.fill: parent
+                }
+
+                Column {
+                    id: bodyCol
+
+                    anchors.fill: parent
+                    anchors.leftMargin: card.bodyPaddingLeft + card.joinRadius
+                    anchors.rightMargin: card.bodyPaddingRight + card.joinRadius
+                    anchors.topMargin: card.bodyPaddingTop
+                    anchors.bottomMargin: card.bodyPaddingBottom
+                    spacing: card.bodySpacing
+
+                    Item {
+                        id: bodyContainer
+
+                        width: parent.width
+                        height: childrenRect.height
+                        // Capture the established body host directly. Avoid a padded
+                        // sourceRect or nested sizing wrapper: both make childrenRect
+                        // geometry fragile during first layout.
+                        layer.enabled: card.visible && card.frameAttached
+                                       && contentTransition.layerRequired
+                        layer.smooth: false
+                        layer.effect: ContentGlitch {
+                            // Same Omni binary construction as free-standing cards,
+                            // swept along the widget's established open direction.
+                            sectionReveal: true
+                            sectionDirectional: true
+                            progress: contentTransition.progress
+                            quality: contentTransition.quality
+                            resolutionPixels: contentTransition.resolutionPixels
+                            direction: card.contentGlitchDirection
+                            seed: contentTransition.seed
+                            splitStrength: card.contentGlitchSplit
+                            splitPixels: contentTransition.splitPixels
+                            visualScale: 1
+                            corner: card.contentCornerRadius
+                            cornerPower: card.contentCornerPower
+                            accent: card.theme.accent
+                        }
+                    }
+
+                }
+
+                transform: Scale {
+                    origin.x: {
+                        if (!card.frameAttached)
+                            return surface.width / 2;
+
+                        if (card.frameAttached && card.frameAttachRight)
+                            return surface.width;
+
+                        if (card.frameAttached && card.frameAttachLeft)
+                            return 0;
+
+                        const xAnchor = card.anchorBarX > 0 ? card.anchorBarX : card.width / 2;
+                        return Math.max(0, Math.min(surface.width, xAnchor - surface.x));
+                    }
+                    origin.y: {
+                        if (!card.frameAttached)
+                            return surface.height / 2;
+
+                        if (card.frameAttached && card.frameAttachBottom)
+                            return surface.height;
+
+                        return 0;
+                    }
+                    xScale: card._layoutReady ? (card.frameAttached ? 1 : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal)) : card.revealScaleFrom
+                    yScale: card._layoutReady ? (card.frameAttached ? 1 : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal)) : card.revealScaleFrom
+                }
             }
-
-        }
-
-        transform: Scale {
-            origin.x: {
-                if (!card.frameAttached)
-                    return surface.width / 2;
-
-                if (card.frameAttached && card.frameAttachRight)
-                    return surface.width;
-
-                if (card.frameAttached && card.frameAttachLeft)
-                    return 0;
-
-                const xAnchor = card.anchorBarX > 0 ? card.anchorBarX : card.width / 2;
-                return Math.max(0, Math.min(surface.width, xAnchor - surface.x));
-            }
-            origin.y: {
-                if (!card.frameAttached)
-                    return surface.height / 2;
-
-                if (card.frameAttached && card.frameAttachBottom)
-                    return surface.height;
-
-                return 0;
-            }
-            xScale: card._layoutReady ? (card.frameAttached ? 1 : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal)) : card.revealScaleFrom
-            yScale: card._layoutReady ? (card.frameAttached ? 1 : (card.revealScaleFrom + (1 - card.revealScaleFrom) * card._reveal)) : card.revealScaleFrom
         }
 
     }

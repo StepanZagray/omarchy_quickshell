@@ -212,7 +212,7 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.topMargin: 6
+            anchors.topMargin: root.space2
             spacing: 12
             Text {
                 readonly property var dyn: qc.omni.tileDyn(detailPanel.t)
@@ -243,14 +243,15 @@ Item {
                     opacity: 0.85
                 }
             }
-            Rectangle {
+            SquircleRect {
                 Layout.alignment: Qt.AlignVCenter
-                width: 22; height: 22; radius: 11
+                width: 22; height: 22
+                root: qc.omni
                 color: closeMouse.containsMouse
                        ? Qt.rgba(qc.omni.ink.r, qc.omni.ink.g, qc.omni.ink.b, 0.08)
                        : "transparent"
-                border.color: qc.omni.sep
-                border.width: 1
+                borderColor: qc.omni.sep
+                borderWidth: 1
                 Text {
                     anchors.centerIn: parent
                     text: "×"
@@ -319,11 +320,12 @@ Item {
             // Slim scroll indicator on the right edge - only visible
             // while overflow exists. Tracks the viewport position so
             // the user has a hint that more content is below.
-            Rectangle {
+            SquircleRect {
                 visible: bodyScroll.contentHeight > bodyScroll.height
                 anchors.right: parent.right
                 anchors.rightMargin: 2
                 width: 3
+                root: qc.omni
                 radius: 1.5
                 color: qc.omni.seal
                 opacity: 0.55

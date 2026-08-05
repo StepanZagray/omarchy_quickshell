@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 // Slim horizontal slider used by the QuickMenu detail panels. Click
 // anywhere on the track to jump; drag the handle for fine adjustment.
@@ -26,32 +27,36 @@ Item {
         slider.committed(v);
     }
 
-    Rectangle {
+    SquircleRect {
         id: track
         anchors.left: parent.left
         anchors.right: labelText.left
         anchors.rightMargin: 12
         anchors.verticalCenter: parent.verticalCenter
         height: 6
+        root: slider.root
         radius: 3
         color: Qt.rgba(slider.root.ink.r, slider.root.ink.g, slider.root.ink.b, 0.12)
 
-        Rectangle {
+        SquircleRect {
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             width: parent.width * Math.max(0, Math.min(1,
                 (slider.value - slider.min) / Math.max(0.0001, slider.max - slider.min)))
-            radius: parent.radius
+            root: slider.root
+            radius: 3
             color: slider.root.seal
         }
 
-        Rectangle {
+        SquircleRect {
             id: handle
-            width: 14; height: 14; radius: 7
+            width: 14; height: 14
+            root: slider.root
+            radius: 7
             color: slider.root.bg
-            border.color: slider.root.seal
-            border.width: 2
+            borderColor: slider.root.seal
+            borderWidth: 2
             anchors.verticalCenter: parent.verticalCenter
             x: parent.width * Math.max(0, Math.min(1,
                 (slider.value - slider.min) / Math.max(0.0001, slider.max - slider.min)))

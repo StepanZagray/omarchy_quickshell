@@ -16,14 +16,14 @@ CardWindow {
     theme: root
     revealed: root.powerMenuVisible && powerMenuPopup.targetScreen
     frameScreenName: powerMenuPopup.shellScreenName
-    cardWidth: 256
+    cardWidth: 240
     contentOpenDelayFactor: 0
     contentOpenDurationFactor: 1
     contentCloseDurationFactor: 0.6
-    bodyPaddingTop: 16
+    bodyPaddingTop: 8
     bodyPaddingBottom: 16
-    bodyPaddingLeft: 3
-    bodyPaddingRight: 8
+    bodyPaddingLeft: -4
+    bodyPaddingRight: 0
     layerNamespace: "omarchy-power"
     frameAttached: true
     frameAttachLeft: true

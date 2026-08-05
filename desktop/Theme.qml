@@ -20,19 +20,37 @@ Item {
     // omarchy's walker.css because that file is rewritten by a buggy
     // script and would drift out of sync with what we actually rendered.
     readonly property string cornerStatePath: Quickshell.env("HOME") + "/.local/state/quickshell-desktop/corners"
-    // Single corner spec for frame popups and every squircle control in the
-    // shell. Matches FrameBorder / CardWindow (16px, fourth-power curve).
-    property int popupCornerRadius: 16
-    readonly property bool round: popupCornerRadius > 0
-    readonly property real popupCornerPower: 4
-    readonly property int cornerRadius: popupCornerRadius
+    // Global corner radii — change the *Default values to retune the shell.
+    // frameCornerRadius (16): desktop frame hole + every popup shell (pockets,
+    // free cards, Omni glass, notifications, tooltips).
+    // contentCornerRadius (12): popup innards + bar controls.
+    readonly property int frameCornerRadiusDefault: 16
+    readonly property int contentCornerRadiusDefault: 16
+    property int frameCornerRadius: frameCornerRadiusDefault
+    property int contentCornerRadius: contentCornerRadiusDefault
+    readonly property int frameRounding: frameCornerRadius
+    readonly property bool round: contentCornerRadius > 0
+    readonly property real contentCornerPower: 4
+
+    // 4px spatial rhythm for every shell surface (interface-design density).
+    readonly property int space1: 4
+    readonly property int space2: 8
+    readonly property int space3: 12
+    readonly property int space4: 16
+    readonly property int popupPadX: space4
+    readonly property int popupPadY: space2
+    readonly property int popupPadBottom: space4
+    readonly property int popupSectionGap: space3
+    readonly property int popupAnchorGap: space3
+    readonly property int shellInset: space4
 
     function setCorners(mode) {
-        const want = (mode === "sharp" || mode === false || mode === 0) ? 0 : 16;
-        theme.popupCornerRadius = want;
+        const sharp = (mode === "sharp" || mode === false || mode === 0);
+        theme.frameCornerRadius = sharp ? 0 : theme.frameCornerRadiusDefault;
+        theme.contentCornerRadius = sharp ? 0 : theme.contentCornerRadiusDefault;
         cornerWriter.command = ["bash", "-lc",
             "mkdir -p " + JSON.stringify(theme.cornerStatePath.replace(/\/[^/]+$/, ""))
-            + " && printf '%s' " + JSON.stringify(want > 0 ? "round" : "sharp")
+            + " && printf '%s' " + JSON.stringify(sharp ? "sharp" : "round")
             + " > " + JSON.stringify(theme.cornerStatePath)];
         cornerWriter.running = false;
         cornerWriter.running = true;
@@ -91,7 +109,7 @@ Item {
     // Local persistence: one-line file containing "round" or "sharp".
     // Read at startup so the toggle survives across logins. We read via a
     // Process (not FileView) because FileView's initial load races with
-    // property assignment in some Quickshell builds, leaving popupCornerRadius
+    // property assignment in some Quickshell builds, leaving contentCornerRadius
     // at its default of 0 even when the file says "round".
     Process { id: cornerWriter; running: false }
     Process {
@@ -100,12 +118,16 @@ Item {
         command: ["cat", theme.cornerStatePath]
         stdout: StdioCollector {
             onStreamFinished: {
-                theme.popupCornerRadius = this.text.trim() === "round" ? 16 : 0;
+                const round = this.text.trim() === "round";
+                theme.frameCornerRadius = round ? theme.frameCornerRadiusDefault : 0;
+                theme.contentCornerRadius = round ? theme.contentCornerRadiusDefault : 0;
             }
         }
         onExited: function(code) {
-            // Missing file -> match Hypr's window rounding.
-            if (code !== 0) theme.popupCornerRadius = 16;
+            if (code !== 0) {
+                theme.frameCornerRadius = theme.frameCornerRadiusDefault;
+                theme.contentCornerRadius = theme.contentCornerRadiusDefault;
+            }
         }
     }
 

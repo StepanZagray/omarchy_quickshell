@@ -27,11 +27,21 @@ Item {
     readonly property color sep: theme.sep
     readonly property string serif: theme.serif
     readonly property string mono: theme.mono
-    readonly property int cornerRadius: theme.cornerRadius
-    readonly property int popupCornerRadius: theme.popupCornerRadius
-    readonly property real popupCornerPower: theme.popupCornerPower
+    readonly property int frameCornerRadius: theme.frameCornerRadius
+    readonly property int contentCornerRadius: theme.contentCornerRadius
+    readonly property real contentCornerPower: theme.contentCornerPower
     readonly property bool round: theme.round
     readonly property int animationDuration: theme.animationDuration
+    readonly property int space1: theme.space1
+    readonly property int space2: theme.space2
+    readonly property int space3: theme.space3
+    readonly property int space4: theme.space4
+    readonly property int popupPadX: theme.popupPadX
+    readonly property int popupPadY: theme.popupPadY
+    readonly property int popupPadBottom: theme.popupPadBottom
+    readonly property int popupSectionGap: theme.popupSectionGap
+    readonly property int popupAnchorGap: theme.popupAnchorGap
+    readonly property int shellInset: theme.shellInset
     // Native system menu visibility. The actions themselves continue to use
     // Omarchy's system commands so only the presentation layer lives here.
     property bool powerMenuVisible: false

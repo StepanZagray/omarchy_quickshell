@@ -1,4 +1,5 @@
 import QtQuick
+import "../fx"
 
 // Click-to-set bar used in the display popup. No drag handler — pointer
 // motion is coalesced through `commitTimer` so a swipe across the track
@@ -57,34 +58,37 @@ Item {
         font.weight: Font.Medium
     }
 
-    Rectangle {
+    SquircleRect {
         id: track
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 2
         height: 3
+        root: slider.root
+        radius: 1.5
         color: Qt.rgba(slider.root.ink.r, slider.root.ink.g, slider.root.ink.b, 0.12)
-        antialiasing: true
 
-        Rectangle {
+        SquircleRect {
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             width: parent.width * slider.norm
+            root: slider.root
+            radius: 1.5
             color: slider.root.seal
             opacity: slider.selected ? 1.0 : 0.75
-            antialiasing: true
             Behavior on width { NumberAnimation { duration: slider.root.animationDuration; easing.type: Easing.InOutCubic } }
             Behavior on opacity { NumberAnimation { duration: slider.root.animationDuration; easing.type: Easing.InOutCubic } }
         }
 
         // Thumb sits 4px above/below the track on the boundary.
-        Rectangle {
+        SquircleRect {
             width: 2
             height: 11
+            root: slider.root
+            radius: 1
             color: slider.root.seal
-            antialiasing: true
             x: Math.max(0, Math.min(parent.width - width,
                         parent.width * slider.norm - width / 2))
             y: -4

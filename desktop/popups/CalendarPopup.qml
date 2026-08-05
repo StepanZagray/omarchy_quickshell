@@ -69,8 +69,8 @@ CardWindow {
     contentCloseDurationFactor: 0.6
     bodyPaddingTop: 8
     bodyPaddingBottom: 16
-    bodyPaddingLeft: 4
-    bodyPaddingRight: 4
+    bodyPaddingLeft: 0
+    bodyPaddingRight: 0
     layerNamespace: "omarchy-calendar"
     frameAttached: true
     onDismiss: calendarPopup.root.calendarVisible = false
@@ -112,7 +112,7 @@ CardWindow {
 
     Column {
         width: parent.width
-        spacing: 10
+        spacing: 4
 
         SquircleRect {
             width: parent.width

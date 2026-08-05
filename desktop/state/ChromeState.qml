@@ -7,11 +7,8 @@ Item {
     required property var shell
     // Desktop frame state. Visuals are click-through and rendered by FrameBorder.
     readonly property int frameThickness: 4
-    // Window rounding is 6 (hypr); sides/bottom leave (gaps_out - frameThickness)
-    // = 3px to the window. frameRounding is the hole corner's edge span
-    // (windowR + gap). The curve itself is an offset of the window squircle
-    // in FrameBorder — not a larger superellipse — so the gap stays constant.
-    readonly property int frameRounding: 9
+    // frameCornerRadius: frame hole + popup shells; contentCornerRadius: innards + bar.
+    readonly property int frameRounding: shell.theme.frameCornerRadius
     // Shared by CardWindow reveal and FrameBorder widget morph.
     readonly property int frameAnimationDuration: shell.theme.animationDuration
     readonly property color frameBg: Qt.rgba(shell.bg.r, shell.bg.g, shell.bg.b, 0.7)

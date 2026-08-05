@@ -42,10 +42,16 @@ Item {
     readonly property string mono:  theme.mono
     readonly property string serif: theme.serif
 
-    readonly property int cornerRadius: theme.cornerRadius
-    readonly property int popupCornerRadius: theme.popupCornerRadius
-    readonly property real popupCornerPower: theme.popupCornerPower
+    readonly property int frameCornerRadius: theme.frameCornerRadius
+    readonly property int contentCornerRadius: theme.contentCornerRadius
+    readonly property real contentCornerPower: theme.contentCornerPower
+    readonly property int popupSectionGap: theme.popupSectionGap
+    readonly property int shellInset: theme.shellInset
     readonly property int animationDuration: theme.animationDuration
+    readonly property int space1: theme.space1
+    readonly property int space2: theme.space2
+    readonly property int space3: theme.space3
+    readonly property int space4: theme.space4
 
     // Sources that feed `allItems`. AppScan reads .desktop files;
     // DesktopApps surfaces shell popup widgets as palette rows.

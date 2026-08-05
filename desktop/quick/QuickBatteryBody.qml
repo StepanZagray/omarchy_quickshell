@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "../fx"
 
 // Battery detail — capacity bar + state line + power-profile selector
 // when powerprofilesctl is installed. Keyboard: arrows / Tab cycle the
@@ -58,20 +59,22 @@ Item {
         Item {
             width: parent.width
             height: 28
-            Rectangle {
+            SquircleRect {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 height: 10
+                root: body.root
                 radius: 5
                 color: Qt.rgba(body.root.ink.r, body.root.ink.g, body.root.ink.b, 0.10)
-                Rectangle {
+                SquircleRect {
                     anchors.left: parent.left
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     width: parent.width * Math.max(0, Math.min(1,
                         (body.shell ? body.shell.batVal : 0) / 100))
-                    radius: parent.radius
+                    root: body.root
+                    radius: 5
                     color: body.shell && body.shell.batVal <= 10
                            ? body.root.seal
                            : (body.shell && body.shell.batVal <= 20

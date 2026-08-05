@@ -1,4 +1,5 @@
 import QtQuick
+import "../../fx"
 import "../../data/OmniData.js" as Data
 import "../data/Format.js" as Fmt
 
@@ -415,14 +416,15 @@ Item {
                     const it = pp.omni.filteredItems[pp.omni.selectedIndex];
                     return (it && it.swatches) ? it.swatches : [];
                 }
-                delegate: Rectangle {
+                delegate: SquircleRect {
                     required property string modelData
                     width: 30
                     height: 30
+                    root: pp.omni
                     radius: 2
                     color: modelData
-                    border.width: 1
-                    border.color: pp.omni.sep
+                    borderWidth: 1
+                    borderColor: pp.omni.sep
                 }
             }
         }

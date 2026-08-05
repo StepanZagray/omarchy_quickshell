@@ -26,6 +26,19 @@ Item {
         root.mediaVisible = true;
     }
 
+    function applyMusicArtUrl(url) {
+        const next = url || "";
+        // Re-assigning the same URL does not notify bindings. Pulse empty→url so
+        // the cover Image reloads after a Quickshell restart while the track is
+        // unchanged (skip/prev works because the URL actually changes).
+        if (next === root.musicArtUrl) {
+            if (next.length === 0)
+                return;
+            root.musicArtUrl = "";
+        }
+        root.musicArtUrl = next;
+    }
+
     function refreshMusic() {
         const players = Mpris.players ? Mpris.players.values : [];
         let best = null;
@@ -49,8 +62,31 @@ Item {
         root.musicPlayer = best;
         root.musicTitle = best ? (best.trackTitle || "") : "";
         root.musicArtist = best ? (best.trackArtist || "") : "";
-        root.musicArtUrl = best ? (best.trackArtUrl || "") : "";
+        root.applyMusicArtUrl(best ? best.trackArtUrl : "");
         root.musicPlaying = best ? !!best.isPlaying : false;
+    }
+
+    Component.onCompleted: {
+        root.refreshMusic();
+        startupSync.restart();
+    }
+
+    Timer {
+        id: startupSync
+
+        interval: 250
+        repeat: true
+        property int ticks: 0
+        onTriggered: {
+            root.refreshMusic();
+            ticks++;
+            if (ticks >= 12) {
+                root.applyMusicArtUrl(root.musicPlayer
+                                      ? root.musicPlayer.trackArtUrl
+                                      : "");
+                stop();
+            }
+        }
     }
 
     function musicToggle() {
@@ -80,7 +116,10 @@ Item {
             delegate: Item {
                 required property MprisPlayer modelData
 
-                Component.onCompleted: root.refreshMusic()
+                Component.onCompleted: {
+                    root.refreshMusic();
+                    Qt.callLater(root.refreshMusic);
+                }
                 Component.onDestruction: root.refreshMusic()
 
                 Connections {
@@ -89,6 +128,10 @@ Item {
                     }
 
                     function onPlaybackStateChanged() {
+                        root.refreshMusic();
+                    }
+
+                    function onMetadataChanged() {
                         root.refreshMusic();
                     }
 

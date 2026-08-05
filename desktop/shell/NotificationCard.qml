@@ -139,79 +139,87 @@ Item {
         id: surface
 
         width: parent.width
-        height: content.implicitHeight + 24
+        height: content.implicitHeight + card.root.space3 * 2
         readonly property color borderBase: card.critical ? card.root.seal : card.root.sep
         opacity: 1
         scale: 1
         transformOrigin: Item.Center
-        layer.enabled: contentTransition.layerRequired
-        layer.smooth: false
-        layer.effect: ContentGlitch {
-            sectionReveal: true
-            progress: contentTransition.progress
-            quality: contentTransition.quality
-            resolutionPixels: contentTransition.resolutionPixels
-            seed: contentTransition.seed
-            splitStrength: card.contentGlitchSplit
-            splitPixels: contentTransition.splitPixels
-            visualScale: 1
-            corner: card.root.popupCornerRadius
-            cornerPower: card.root.popupCornerPower
-            accent: card.root.accent
-        }
 
-        SquircleSurface {
+        SquircleClipHost {
             anchors.fill: parent
-            color: card.root.bg
-            borderColor: surface.borderBase
-            borderWidth: card.critical ? 2 : 1
-            radius: card.root.popupCornerRadius
-            power: card.root.popupCornerPower
-        }
+            root: card.root
+            shell: true
 
-        // Declared before content so the cells sit underneath the glyphs.
-        // Screen-local origin matches CardWindow's stable popup lattice.
-        BootGlitch {
-            id: bootGlitch
+            Item {
+                anchors.fill: parent
+                layer.enabled: contentTransition.layerRequired
+                layer.smooth: false
+                layer.effect: ContentGlitch {
+                    sectionReveal: true
+                    progress: contentTransition.progress
+                    quality: contentTransition.quality
+                    resolutionPixels: contentTransition.resolutionPixels
+                    seed: contentTransition.seed
+                    splitStrength: card.contentGlitchSplit
+                    splitPixels: contentTransition.splitPixels
+                    visualScale: 1
+                    corner: card.root.frameCornerRadius
+                    cornerPower: card.root.contentCornerPower
+                    accent: card.root.accent
+                }
 
-            anchors.fill: parent
-            theme: card.root
-            corner: card.root.popupCornerRadius
-            cornerPower: card.root.popupCornerPower
-            visualScale: 1
-            resolutionPixels: contentTransition.resolutionPixels
-            originX: card.glitchOriginX
-            originY: card.glitchOriginY
-        }
+                SquircleSurface {
+                    anchors.fill: parent
+                    color: card.root.bg
+                    borderColor: surface.borderBase
+                    borderWidth: card.critical ? 2 : 1
+                    radius: card.root.frameCornerRadius
+                    power: card.root.contentCornerPower
+                }
 
-        MouseArea {
-            id: cardMouse
-            anchors.fill: parent
-            enabled: !card._closing
-            hoverEnabled: true
-            cursorShape: card.notification.actions.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: card.root.invokeNotification(card.notification)
-            onContainsMouseChanged: {
-                if (containsMouse)
-                    expireTimer.stop();
-                else
-                    card.restartExpiry();
-            }
-        }
+                // Declared before content so the cells sit underneath the glyphs.
+                // Screen-local origin matches CardWindow's stable popup lattice.
+                BootGlitch {
+                    id: bootGlitch
 
-        Item {
-            id: contentHost
+                    anchors.fill: parent
+                    theme: card.root
+                    corner: card.root.frameCornerRadius
+                    cornerPower: card.root.contentCornerPower
+                    visualScale: 1
+                    resolutionPixels: contentTransition.resolutionPixels
+                    originX: card.glitchOriginX
+                    originY: card.glitchOriginY
+                }
 
-            anchors.fill: parent
+                MouseArea {
+                    id: cardMouse
+                    anchors.fill: parent
+                    enabled: !card._closing
+                    hoverEnabled: true
+                    cursorShape: card.notification.actions.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: card.root.invokeNotification(card.notification)
+                    onContainsMouseChanged: {
+                        if (containsMouse)
+                            expireTimer.stop();
+                        else
+                            card.restartExpiry();
+                    }
+                }
 
-            Row {
+                Item {
+                    id: contentHost
+
+                    anchors.fill: parent
+
+                    Row {
                 id: content
 
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 12
-                spacing: 12
+                anchors.margins: card.root.space3
+                spacing: card.root.space3
 
                 Item {
                     width: 42
@@ -315,17 +323,27 @@ Item {
                         elide: Text.ElideRight
                     }
 
-                    Rectangle {
+                    Item {
                         readonly property real progressValue: Number(card.notification.hints["value"])
                         visible: !isNaN(progressValue) && progressValue >= 0 && progressValue <= 100
                         width: parent.width
                         height: visible ? 3 : 0
-                        color: Qt.rgba(card.root.ink.r, card.root.ink.g, card.root.ink.b, 0.14)
 
-                        Rectangle {
-                            width: parent.width * Math.max(0, Math.min(1, parent.progressValue / 100))
-                            height: parent.height
-                            color: card.accent
+                        SquircleRect {
+                            anchors.fill: parent
+                            root: card.root
+                            radius: 1.5
+                            color: Qt.rgba(card.root.ink.r, card.root.ink.g, card.root.ink.b, 0.14)
+
+                            SquircleRect {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                width: parent.width * Math.max(0, Math.min(1, parent.parent.progressValue / 100))
+                                root: card.root
+                                radius: 1.5
+                                color: card.accent
+                            }
                         }
                     }
 
@@ -377,6 +395,8 @@ Item {
                             }
                         }
                     }
+                }
+            }
                 }
             }
         }

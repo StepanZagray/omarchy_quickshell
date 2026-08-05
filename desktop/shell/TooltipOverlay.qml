@@ -45,23 +45,29 @@ PanelWindow {
 
         opacity: tooltipOverlay.reveal
 
-        SquircleSurface {
+        SquircleClipHost {
             anchors.fill: parent
-            color: tooltipOverlay.root.bg
-            borderColor: tooltipOverlay.root.sep
-            borderWidth: 1
-            radius: tooltipOverlay.root.popupCornerRadius
-            power: tooltipOverlay.root.popupCornerPower
-        }
+            root: tooltipOverlay.root
+            shell: true
 
-        Text {
-            id: tipLabel
-            anchors.centerIn: parent
-            text: tooltipOverlay.root.tooltipText
-            color: tooltipOverlay.root.ink
-            font.family: tooltipOverlay.root.mono
-            font.pixelSize: 10
-            font.letterSpacing: 1
+            SquircleSurface {
+                anchors.fill: parent
+                color: tooltipOverlay.root.bg
+                borderColor: tooltipOverlay.root.sep
+                borderWidth: 1
+                radius: tooltipOverlay.root.frameCornerRadius
+                power: tooltipOverlay.root.contentCornerPower
+            }
+
+            Text {
+                id: tipLabel
+                anchors.centerIn: parent
+                text: tooltipOverlay.root.tooltipText
+                color: tooltipOverlay.root.ink
+                font.family: tooltipOverlay.root.mono
+                font.pixelSize: 10
+                font.letterSpacing: 1
+            }
         }
     }
 }

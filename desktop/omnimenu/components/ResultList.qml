@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import "../../fx"
 
 // Vertical result list. Row delegate handles icon resolution (image
 // fallback to glyph), title with drill-in chevron, favourite star, and
@@ -36,8 +37,9 @@ Item {
             height: 38
             readonly property bool isSelected: rl.omni.selectedIndex === index
 
-            Rectangle {
+            SquircleRect {
                 anchors.fill: parent
+                root: rl.omni
                 color: row.isSelected ? rl.omni.rowSel
                                       : rowMouse.containsMouse ? rl.omni.rowHi
                                                                : "transparent"
